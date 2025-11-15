@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package grpc;
+
+option go_package = "replication-go/grpc";
+
+message Nothing {}
+message Acknowledgement {}
+
+message NodeInfo {
+  // ip:port
+  // i.e: 127.0.0.1:4356
+  string connectionAddr = 1;
+}
+
+message Amount {
+  NodeInfo nodeInfo = 1;
+  uint32 amount = 2;
+}
+
+message Outcome {
+  NodeInfo nodeInfo = 1;
+}
+
+message Data {
+  bytes data = 1;
+}
+
+service AuctionService {
+  // BULLY ELECTION ALGORITHM RPC CALLS
+  // Node sends this to start an election
+  rpc HoldElection(NodeInfo) returns (Acknowledgement);
+
+  // Node sends this to indicate that it's still alive + enter the election
+  rpc EnterElection(NodeInfo) returns (Acknowledgement);
+
+  // The winner of the election sends this to indicate that they won
+  rpc ElectionWinner(NodeInfo) returns (Acknowledgement);
+
+  // REPLICATION RPC CALLS
+  rpc Replicate(Data) returns (Acknowledgement);
+}
+
