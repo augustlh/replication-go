@@ -54,6 +54,7 @@ type AucServer struct {
 	proto.UnimplementedAuctionServiceServer
 	serverInfo NodeInfo
 
+	leaderInfo NodeInfo
 	messages chan Message
 	isLeader atomic.Bool
 	electionStatus atm.GenericAtomic[ElectionState]
@@ -68,6 +69,7 @@ func NewAucServer(info NodeInfo) *AucServer {
 	server.otherServers = make(map[NodeInfo]proto.AuctionServiceClient);
 	server.messages = make(chan Message, 10);
 	server.isLeader.Store(true);
+	server.leaderInfo = server.serverInfo;
 	server.electionStatus.Store(NoElection);
 
 	return server;
@@ -87,17 +89,24 @@ func (server *AucServer) Serve() {
 	grpcServer.Serve(tcpConnection);
 }
 
-// 4
 func (server *AucServer) HoldElection(
 	ctx context.Context,
 	req *proto.NodeInfo) (*proto.Acknowledgement, error) {
 
+	msg := Message { info: NodeInfo { req.ConnectionAddr }, kind: HoldElection };
+	server.messages <- msg
+
+	return &proto.Acknowledgement{}, nil
+}
+
+// 4
+func (server *AucServer) HoldElectionHandler(otherInfo NodeInfo) error {
+
 	protoMessage := proto.NodeInfo{ConnectionAddr: server.serverInfo.connectionAddr};
-	otherInfo := NodeInfoFromReq(req);
 	if otherInfo.LessThan(&server.serverInfo) {
 
 		server.otherServers[otherInfo].EnterElection(
-			ctx, &protoMessage,
+			context.Background(), &protoMessage,
 		);
 
 		// If not already running election, then set running election to true
@@ -112,37 +121,61 @@ func (server *AucServer) HoldElection(
 
 	}
 
-	return &proto.Acknowledgement{}, nil
+	return nil
 }
 
 // 3
-func (server *AucServer) EnterElection(ctx context.Context, req *proto.NodeInfo) (*proto.Nothing, error) {
+func (server *AucServer) EnterElection(
+	ctx context.Context, req *proto.NodeInfo) (*proto.Acknowledgement, error) {
 	otherInfo := NodeInfoFromReq(req);
+	server.messages <- Message { info: otherInfo, kind: EnterElection }
+
+	return &proto.Acknowledgement{}, nil
+}
+
+func (server *AucServer) EnterElectionHandler(otherInfo NodeInfo) error {
 	if server.serverInfo.LessThan(&otherInfo) {
 		server.electionStatus.Store(WaitingForVictoryMessage);
 	}
 
-	return &proto.Nothing{}, nil
+	return nil
 }
 
 func (server *AucServer) ElectionWinner(
 	ctx context.Context,
 	req *proto.NodeInfo) (*proto.Acknowledgement, error) {
-	server.isLeader.Store(false);
+
+	otherInfo := NodeInfoFromReq(req);
+	server.messages <- Message { info: otherInfo, kind: Winner }
 
 	return &proto.Acknowledgement{}, nil
 }
 
-func (server *AucServer) Replicate(ctx context.Context, req *proto.Nothing) (*proto.Nothing, error) {
+func (server *AucServer) ElectionWinnerHandler(otherInfo NodeInfo) error {
+	server.leaderInfo = otherInfo;
+	server.isLeader.Store(false);
+	return nil
+}
+
+func (server *AucServer) messageHandler() {
+	for {
+		msg := <- server.messages
+
+		switch msg.kind {
+		case HoldElection:
+		server.HoldElectionHandler(msg.info)
+		case EnterElection:
+		server.EnterElectionHandler(msg.info)
+		case Winner:
+		server.ElectionWinnerHandler(msg.info)
+		}
+	}
+}
+
+func (server *AucServer) Replicate(
+	ctx context.Context, req *proto.Nothing) (*proto.Nothing, error) {
 	return &proto.Nothing{}, nil
 }
 
 
-func (server *AucServer) HoldElection2() {
-
-	for _, conn := range server.otherServers {
-		conn.HoldElection(context.Background(), &proto.Nothing{});
-	}
-
-}
 
