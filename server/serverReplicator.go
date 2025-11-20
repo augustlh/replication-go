@@ -3,6 +3,7 @@ package server;
 import (
 	"fmt"
 	"net"
+	"os"
 	"context"
 	"sync/atomic"
 	atm "replication-go/generic_atomic"
@@ -43,6 +44,13 @@ type ServerConnection struct {
 	assumedDead bool
 }
 
+type Bid struct {
+	finalized bool
+	bidder string
+	item string
+	bid uint32
+}
+
 type ElectionState byte;
 const (
 	NoElection ElectionState = iota
@@ -60,23 +68,30 @@ type AucServer struct {
 	electionStatus atm.GenericAtomic[ElectionState]
 
 	otherServers map[NodeInfo]proto.AuctionServiceClient
+
+	bids []Bid
 }
 
-func NewAucServer(info NodeInfo) *AucServer {
+func NewAucServer(info NodeInfo, leaderInfo *NodeInfo) *AucServer {
 	server := new(AucServer);
 
 	server.serverInfo = info;
 	server.otherServers = make(map[NodeInfo]proto.AuctionServiceClient);
 	server.messages = make(chan Message, 10);
-	server.isLeader.Store(true);
-	server.leaderInfo = server.serverInfo;
 	server.electionStatus.Store(NoElection);
+
+	if leaderInfo == nil {
+		server.isLeader.Store(true);
+		server.leaderInfo = server.serverInfo;
+	} else {
+		server.isLeader.Store(false);
+		server.leaderInfo = *leaderInfo;
+	}
 
 	return server;
 }
 
 func (server *AucServer) Serve() {
-
 	grpcServer := grpc.NewServer();
 	proto.RegisterAuctionServiceServer(grpcServer, server);
 
@@ -86,6 +101,7 @@ func (server *AucServer) Serve() {
 		panic(fmt.Sprintf("Server failed to bind to %s", server.serverInfo.connectionAddr));
 	}
 
+	go server.messageHandler();
 	grpcServer.Serve(tcpConnection);
 }
 
@@ -163,19 +179,66 @@ func (server *AucServer) messageHandler() {
 
 		switch msg.kind {
 		case HoldElection:
-		server.HoldElectionHandler(msg.info)
+			server.HoldElectionHandler(msg.info)
 		case EnterElection:
-		server.EnterElectionHandler(msg.info)
+			server.EnterElectionHandler(msg.info)
 		case Winner:
-		server.ElectionWinnerHandler(msg.info)
+			server.ElectionWinnerHandler(msg.info)
 		}
 	}
 }
 
 func (server *AucServer) Replicate(
-	ctx context.Context, req *proto.Nothing) (*proto.Nothing, error) {
-	return &proto.Nothing{}, nil
+	ctx context.Context, req *proto.ReplicationData) (*proto.Acknowledgement, error) {
+
+	bid := Bid { bidder: req.Username, bid: req.Amount, item: req.Item }
+
+	switch req.Kind {
+	case proto.ReplicationEventKind_Bid:
+		bid.finalized = false
+		server.bids = append(server.bids, bid)
+	case proto.ReplicationEventKind_Result:
+		bid.finalized = true
+		server.bids = append(server.bids, bid)
+	}
+
+	return &proto.Acknowledgement{}, nil
 }
 
+func (server *AucServer) AuctionHandler() {
+	if !server.isLeader.Load() {
+		return
+	}
+	var item = "a"
 
+	for {
+		data := proto.ReplicationData{ 
+			Kind: proto.ReplicationEventKind_Bid,  
+			Username: "nobody",
+			Amount: 0,
+			Item: item,
+		};
+
+		server.bids = append(server.bids, Bid{
+			finalized: false,
+			bidder: "nobody",
+			item: item,
+			bid: 0 })
+
+		for _, node := range server.otherServers{
+			node.Replicate(context.Background(), &data)
+		}
+	}
+
+}
+
+func main() {
+	if len(os.Args) > 1 {
+		server := NewAucServer(NodeInfo { "localhost:5001" }, &NodeInfo { "localhost:5000" })
+		server.Serve()
+	} else {
+		server := NewAucServer(NodeInfo { "localhost:5000" }, nil)
+		server.Serve()
+	}
+}
 
