@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"log"
 	"context"
 	"sync/atomic"
 	atm "replication-go/generic_atomic"
@@ -190,6 +191,11 @@ func (server *AucServer) messageHandler() {
 
 func (server *AucServer) Replicate(
 	ctx context.Context, req *proto.ReplicationData) (*proto.Acknowledgement, error) {
+
+	if server.isLeader.Load() {
+		log.Println("Possible split brain error occured - Received replication data from leader whilst being the leader")
+		return &proto.Acknowledgement{}, nil
+	}
 
 	bid := Bid { bidder: req.Username, bid: req.Amount, item: req.Item }
 
