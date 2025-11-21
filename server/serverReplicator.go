@@ -7,6 +7,7 @@ import (
 	"log"
 	"context"
 	"sync/atomic"
+	"replication-go/common"
 	atm "replication-go/generic_atomic"
 	proto "replication-go/grpc"
 	"google.golang.org/grpc"
@@ -21,26 +22,12 @@ const (
 )
 
 type Message struct {
-	info NodeInfo
+	info common.NodeInfo
 	kind MessageKind
 }
 
-type NodeInfo struct {
-	connectionAddr string
-}
-
-func NodeInfoFromReq(req *proto.NodeInfo) NodeInfo {
-	return NodeInfo {
-		req.ConnectionAddr,
-	};
-}
-
-func (this *NodeInfo) LessThan(that *NodeInfo) bool {
-	return this.connectionAddr < that.connectionAddr;
-}
-
 type ServerConnection struct {
-	info NodeInfo
+	info common.NodeInfo
 	conn proto.AuctionServiceClient
 	assumedDead bool
 }
@@ -61,23 +48,23 @@ const (
 
 type AucServer struct {
 	proto.UnimplementedAuctionServiceServer
-	serverInfo NodeInfo
+	serverInfo common.NodeInfo
 
-	leaderInfo NodeInfo
+	leaderInfo common.NodeInfo
 	messages chan Message
 	isLeader atomic.Bool
 	electionStatus atm.GenericAtomic[ElectionState]
 
-	otherServers map[NodeInfo]proto.AuctionServiceClient
+	otherServers map[common.NodeInfo]proto.AuctionServiceClient
 
 	bids []Bid
 }
 
-func NewAucServer(info NodeInfo, leaderInfo *NodeInfo) *AucServer {
+func NewAucServer(info common.NodeInfo, leaderInfo *common.NodeInfo) *AucServer {
 	server := new(AucServer);
 
 	server.serverInfo = info;
-	server.otherServers = make(map[NodeInfo]proto.AuctionServiceClient);
+	server.otherServers = make(map[common.NodeInfo]proto.AuctionServiceClient);
 	server.messages = make(chan Message, 10);
 	server.electionStatus.Store(NoElection);
 
@@ -96,10 +83,10 @@ func (server *AucServer) Serve() {
 	grpcServer := grpc.NewServer();
 	proto.RegisterAuctionServiceServer(grpcServer, server);
 
-	tcpConnection, err := net.Listen("tcp", server.serverInfo.connectionAddr);
+	tcpConnection, err := net.Listen("tcp", server.serverInfo.Get());
 
 	if err != nil {
-		panic(fmt.Sprintf("Server failed to bind to %s", server.serverInfo.connectionAddr));
+		panic(fmt.Sprintf("Server failed to bind to %s", server.serverInfo.Get()));
 	}
 
 	go server.messageHandler();
@@ -110,16 +97,16 @@ func (server *AucServer) HoldElection(
 	ctx context.Context,
 	req *proto.NodeInfo) (*proto.Acknowledgement, error) {
 
-	msg := Message { info: NodeInfo { req.ConnectionAddr }, kind: HoldElection };
+	msg := Message { info: common.NodeInfo { ConnectionAddr: req.ConnectionAddr }, kind: HoldElection };
 	server.messages <- msg
 
 	return &proto.Acknowledgement{}, nil
 }
 
 // 4
-func (server *AucServer) HoldElectionHandler(otherInfo NodeInfo) error {
+func (server *AucServer) HoldElectionHandler(otherInfo common.NodeInfo) error {
 
-	protoMessage := proto.NodeInfo{ConnectionAddr: server.serverInfo.connectionAddr};
+	protoMessage := proto.NodeInfo{ConnectionAddr: server.serverInfo.Get()};
 	if otherInfo.LessThan(&server.serverInfo) {
 
 		server.otherServers[otherInfo].EnterElection(
@@ -144,13 +131,13 @@ func (server *AucServer) HoldElectionHandler(otherInfo NodeInfo) error {
 // 3
 func (server *AucServer) EnterElection(
 	ctx context.Context, req *proto.NodeInfo) (*proto.Acknowledgement, error) {
-	otherInfo := NodeInfoFromReq(req);
+	otherInfo := common.NodeInfoFromReq(req);
 	server.messages <- Message { info: otherInfo, kind: EnterElection }
 
 	return &proto.Acknowledgement{}, nil
 }
 
-func (server *AucServer) EnterElectionHandler(otherInfo NodeInfo) error {
+func (server *AucServer) EnterElectionHandler(otherInfo common.NodeInfo) error {
 	if server.serverInfo.LessThan(&otherInfo) {
 		server.electionStatus.Store(WaitingForVictoryMessage);
 	}
@@ -162,13 +149,13 @@ func (server *AucServer) ElectionWinner(
 	ctx context.Context,
 	req *proto.NodeInfo) (*proto.Acknowledgement, error) {
 
-	otherInfo := NodeInfoFromReq(req);
+	otherInfo := common.NodeInfoFromReq(req);
 	server.messages <- Message { info: otherInfo, kind: Winner }
 
 	return &proto.Acknowledgement{}, nil
 }
 
-func (server *AucServer) ElectionWinnerHandler(otherInfo NodeInfo) error {
+func (server *AucServer) ElectionWinnerHandler(otherInfo common.NodeInfo) error {
 	server.leaderInfo = otherInfo;
 	server.isLeader.Store(false);
 	return nil
@@ -240,10 +227,10 @@ func (server *AucServer) AuctionHandler() {
 
 func main() {
 	if len(os.Args) > 1 {
-		server := NewAucServer(NodeInfo { "localhost:5001" }, &NodeInfo { "localhost:5000" })
+		server := NewAucServer(common.NodeInfo { ConnectionAddr: "localhost:5001" }, &common.NodeInfo { ConnectionAddr: "localhost:5000" })
 		server.Serve()
 	} else {
-		server := NewAucServer(NodeInfo { "localhost:5000" }, nil)
+		server := NewAucServer(common.NodeInfo { ConnectionAddr: "localhost:5000" }, nil)
 		server.Serve()
 	}
 }

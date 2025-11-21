@@ -22,9 +22,24 @@ message Outcome {
   NodeInfo nodeInfo = 1;
 }
 
-message Data {
-  bytes data = 1;
+enum ReplicationEventKind {
+  Bid = 0;
+  Result = 1;
 }
+
+message ReplicationData {
+  ReplicationEventKind kind = 1;
+  string username = 2;
+  uint32 amount = 3;
+  string item = 4;
+}
+
+message ClientBid {
+  string username = 1;
+  uint32 amount = 2;
+  string item = 3;
+}
+
 
 service AuctionService {
   // BULLY ELECTION ALGORITHM RPC CALLS
@@ -38,6 +53,8 @@ service AuctionService {
   rpc ElectionWinner(NodeInfo) returns (Acknowledgement);
 
   // REPLICATION RPC CALLS
-  rpc Replicate(Data) returns (Acknowledgement);
+  rpc Replicate(ReplicationData) returns (Acknowledgement);
+
+  rpc Bid(ClientBid) returns (Acknowledgement);
 }
 

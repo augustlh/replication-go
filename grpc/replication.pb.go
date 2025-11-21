@@ -21,6 +21,52 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type ReplicationEventKind int32
+
+const (
+	ReplicationEventKind_Bid    ReplicationEventKind = 0
+	ReplicationEventKind_Result ReplicationEventKind = 1
+)
+
+// Enum value maps for ReplicationEventKind.
+var (
+	ReplicationEventKind_name = map[int32]string{
+		0: "Bid",
+		1: "Result",
+	}
+	ReplicationEventKind_value = map[string]int32{
+		"Bid":    0,
+		"Result": 1,
+	}
+)
+
+func (x ReplicationEventKind) Enum() *ReplicationEventKind {
+	p := new(ReplicationEventKind)
+	*p = x
+	return p
+}
+
+func (x ReplicationEventKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ReplicationEventKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_grpc_replication_proto_enumTypes[0].Descriptor()
+}
+
+func (ReplicationEventKind) Type() protoreflect.EnumType {
+	return &file_grpc_replication_proto_enumTypes[0]
+}
+
+func (x ReplicationEventKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ReplicationEventKind.Descriptor instead.
+func (ReplicationEventKind) EnumDescriptor() ([]byte, []int) {
+	return file_grpc_replication_proto_rawDescGZIP(), []int{0}
+}
+
 type Nothing struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -235,27 +281,30 @@ func (x *Outcome) GetNodeInfo() *NodeInfo {
 	return nil
 }
 
-type Data struct {
+type ReplicationData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Data          []byte                 `protobuf:"bytes,1,opt,name=data,proto3" json:"data,omitempty"`
+	Kind          ReplicationEventKind   `protobuf:"varint,1,opt,name=kind,proto3,enum=grpc.ReplicationEventKind" json:"kind,omitempty"`
+	Username      string                 `protobuf:"bytes,2,opt,name=username,proto3" json:"username,omitempty"`
+	Amount        uint32                 `protobuf:"varint,3,opt,name=amount,proto3" json:"amount,omitempty"`
+	Item          string                 `protobuf:"bytes,4,opt,name=item,proto3" json:"item,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *Data) Reset() {
-	*x = Data{}
+func (x *ReplicationData) Reset() {
+	*x = ReplicationData{}
 	mi := &file_grpc_replication_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *Data) String() string {
+func (x *ReplicationData) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Data) ProtoMessage() {}
+func (*ReplicationData) ProtoMessage() {}
 
-func (x *Data) ProtoReflect() protoreflect.Message {
+func (x *ReplicationData) ProtoReflect() protoreflect.Message {
 	mi := &file_grpc_replication_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -267,16 +316,37 @@ func (x *Data) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Data.ProtoReflect.Descriptor instead.
-func (*Data) Descriptor() ([]byte, []int) {
+// Deprecated: Use ReplicationData.ProtoReflect.Descriptor instead.
+func (*ReplicationData) Descriptor() ([]byte, []int) {
 	return file_grpc_replication_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *Data) GetData() []byte {
+func (x *ReplicationData) GetKind() ReplicationEventKind {
 	if x != nil {
-		return x.Data
+		return x.Kind
 	}
-	return nil
+	return ReplicationEventKind_Bid
+}
+
+func (x *ReplicationData) GetUsername() string {
+	if x != nil {
+		return x.Username
+	}
+	return ""
+}
+
+func (x *ReplicationData) GetAmount() uint32 {
+	if x != nil {
+		return x.Amount
+	}
+	return 0
+}
+
+func (x *ReplicationData) GetItem() string {
+	if x != nil {
+		return x.Item
+	}
+	return ""
 }
 
 var File_grpc_replication_proto protoreflect.FileDescriptor
@@ -292,15 +362,21 @@ const file_grpc_replication_proto_rawDesc = "" +
 	"\bnodeInfo\x18\x01 \x01(\v2\x0e.grpc.NodeInfoR\bnodeInfo\x12\x16\n" +
 	"\x06amount\x18\x02 \x01(\rR\x06amount\"5\n" +
 	"\aOutcome\x12*\n" +
-	"\bnodeInfo\x18\x01 \x01(\v2\x0e.grpc.NodeInfoR\bnodeInfo\"\x1a\n" +
-	"\x04Data\x12\x12\n" +
-	"\x04data\x18\x01 \x01(\fR\x04data2\xe8\x01\n" +
+	"\bnodeInfo\x18\x01 \x01(\v2\x0e.grpc.NodeInfoR\bnodeInfo\"\x89\x01\n" +
+	"\x0fReplicationData\x12.\n" +
+	"\x04kind\x18\x01 \x01(\x0e2\x1a.grpc.ReplicationEventKindR\x04kind\x12\x1a\n" +
+	"\busername\x18\x02 \x01(\tR\busername\x12\x16\n" +
+	"\x06amount\x18\x03 \x01(\rR\x06amount\x12\x12\n" +
+	"\x04item\x18\x04 \x01(\tR\x04item*+\n" +
+	"\x14ReplicationEventKind\x12\a\n" +
+	"\x03Bid\x10\x00\x12\n" +
+	"\n" +
+	"\x06Result\x10\x012\xf3\x01\n" +
 	"\x0eAuctionService\x125\n" +
 	"\fHoldElection\x12\x0e.grpc.NodeInfo\x1a\x15.grpc.Acknowledgement\x126\n" +
 	"\rEnterElection\x12\x0e.grpc.NodeInfo\x1a\x15.grpc.Acknowledgement\x127\n" +
-	"\x0eElectionWinner\x12\x0e.grpc.NodeInfo\x1a\x15.grpc.Acknowledgement\x12.\n" +
-	"\tReplicate\x12\n" +
-	".grpc.Data\x1a\x15.grpc.AcknowledgementB\x15Z\x13replication-go/grpcb\x06proto3"
+	"\x0eElectionWinner\x12\x0e.grpc.NodeInfo\x1a\x15.grpc.Acknowledgement\x129\n" +
+	"\tReplicate\x12\x15.grpc.ReplicationData\x1a\x15.grpc.AcknowledgementB\x15Z\x13replication-go/grpcb\x06proto3"
 
 var (
 	file_grpc_replication_proto_rawDescOnce sync.Once
@@ -314,31 +390,34 @@ func file_grpc_replication_proto_rawDescGZIP() []byte {
 	return file_grpc_replication_proto_rawDescData
 }
 
+var file_grpc_replication_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_grpc_replication_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_grpc_replication_proto_goTypes = []any{
-	(*Nothing)(nil),         // 0: grpc.Nothing
-	(*Acknowledgement)(nil), // 1: grpc.Acknowledgement
-	(*NodeInfo)(nil),        // 2: grpc.NodeInfo
-	(*Amount)(nil),          // 3: grpc.Amount
-	(*Outcome)(nil),         // 4: grpc.Outcome
-	(*Data)(nil),            // 5: grpc.Data
+	(ReplicationEventKind)(0), // 0: grpc.ReplicationEventKind
+	(*Nothing)(nil),           // 1: grpc.Nothing
+	(*Acknowledgement)(nil),   // 2: grpc.Acknowledgement
+	(*NodeInfo)(nil),          // 3: grpc.NodeInfo
+	(*Amount)(nil),            // 4: grpc.Amount
+	(*Outcome)(nil),           // 5: grpc.Outcome
+	(*ReplicationData)(nil),   // 6: grpc.ReplicationData
 }
 var file_grpc_replication_proto_depIdxs = []int32{
-	2, // 0: grpc.Amount.nodeInfo:type_name -> grpc.NodeInfo
-	2, // 1: grpc.Outcome.nodeInfo:type_name -> grpc.NodeInfo
-	2, // 2: grpc.AuctionService.HoldElection:input_type -> grpc.NodeInfo
-	2, // 3: grpc.AuctionService.EnterElection:input_type -> grpc.NodeInfo
-	2, // 4: grpc.AuctionService.ElectionWinner:input_type -> grpc.NodeInfo
-	5, // 5: grpc.AuctionService.Replicate:input_type -> grpc.Data
-	1, // 6: grpc.AuctionService.HoldElection:output_type -> grpc.Acknowledgement
-	1, // 7: grpc.AuctionService.EnterElection:output_type -> grpc.Acknowledgement
-	1, // 8: grpc.AuctionService.ElectionWinner:output_type -> grpc.Acknowledgement
-	1, // 9: grpc.AuctionService.Replicate:output_type -> grpc.Acknowledgement
-	6, // [6:10] is the sub-list for method output_type
-	2, // [2:6] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	3, // 0: grpc.Amount.nodeInfo:type_name -> grpc.NodeInfo
+	3, // 1: grpc.Outcome.nodeInfo:type_name -> grpc.NodeInfo
+	0, // 2: grpc.ReplicationData.kind:type_name -> grpc.ReplicationEventKind
+	3, // 3: grpc.AuctionService.HoldElection:input_type -> grpc.NodeInfo
+	3, // 4: grpc.AuctionService.EnterElection:input_type -> grpc.NodeInfo
+	3, // 5: grpc.AuctionService.ElectionWinner:input_type -> grpc.NodeInfo
+	6, // 6: grpc.AuctionService.Replicate:input_type -> grpc.ReplicationData
+	2, // 7: grpc.AuctionService.HoldElection:output_type -> grpc.Acknowledgement
+	2, // 8: grpc.AuctionService.EnterElection:output_type -> grpc.Acknowledgement
+	2, // 9: grpc.AuctionService.ElectionWinner:output_type -> grpc.Acknowledgement
+	2, // 10: grpc.AuctionService.Replicate:output_type -> grpc.Acknowledgement
+	7, // [7:11] is the sub-list for method output_type
+	3, // [3:7] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_grpc_replication_proto_init() }
@@ -351,13 +430,14 @@ func file_grpc_replication_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_grpc_replication_proto_rawDesc), len(file_grpc_replication_proto_rawDesc)),
-			NumEnums:      0,
+			NumEnums:      1,
 			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_grpc_replication_proto_goTypes,
 		DependencyIndexes: file_grpc_replication_proto_depIdxs,
+		EnumInfos:         file_grpc_replication_proto_enumTypes,
 		MessageInfos:      file_grpc_replication_proto_msgTypes,
 	}.Build()
 	File_grpc_replication_proto = out.File

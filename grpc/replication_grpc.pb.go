@@ -37,7 +37,7 @@ type AuctionServiceClient interface {
 	// The winner of the election sends this to indicate that they won
 	ElectionWinner(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*Acknowledgement, error)
 	// REPLICATION RPC CALLS
-	Replicate(ctx context.Context, in *Data, opts ...grpc.CallOption) (*Acknowledgement, error)
+	Replicate(ctx context.Context, in *ReplicationData, opts ...grpc.CallOption) (*Acknowledgement, error)
 }
 
 type auctionServiceClient struct {
@@ -78,7 +78,7 @@ func (c *auctionServiceClient) ElectionWinner(ctx context.Context, in *NodeInfo,
 	return out, nil
 }
 
-func (c *auctionServiceClient) Replicate(ctx context.Context, in *Data, opts ...grpc.CallOption) (*Acknowledgement, error) {
+func (c *auctionServiceClient) Replicate(ctx context.Context, in *ReplicationData, opts ...grpc.CallOption) (*Acknowledgement, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Acknowledgement)
 	err := c.cc.Invoke(ctx, AuctionService_Replicate_FullMethodName, in, out, cOpts...)
@@ -100,7 +100,7 @@ type AuctionServiceServer interface {
 	// The winner of the election sends this to indicate that they won
 	ElectionWinner(context.Context, *NodeInfo) (*Acknowledgement, error)
 	// REPLICATION RPC CALLS
-	Replicate(context.Context, *Data) (*Acknowledgement, error)
+	Replicate(context.Context, *ReplicationData) (*Acknowledgement, error)
 	mustEmbedUnimplementedAuctionServiceServer()
 }
 
@@ -120,7 +120,7 @@ func (UnimplementedAuctionServiceServer) EnterElection(context.Context, *NodeInf
 func (UnimplementedAuctionServiceServer) ElectionWinner(context.Context, *NodeInfo) (*Acknowledgement, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ElectionWinner not implemented")
 }
-func (UnimplementedAuctionServiceServer) Replicate(context.Context, *Data) (*Acknowledgement, error) {
+func (UnimplementedAuctionServiceServer) Replicate(context.Context, *ReplicationData) (*Acknowledgement, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Replicate not implemented")
 }
 func (UnimplementedAuctionServiceServer) mustEmbedUnimplementedAuctionServiceServer() {}
@@ -199,7 +199,7 @@ func _AuctionService_ElectionWinner_Handler(srv interface{}, ctx context.Context
 }
 
 func _AuctionService_Replicate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Data)
+	in := new(ReplicationData)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -211,7 +211,7 @@ func _AuctionService_Replicate_Handler(srv interface{}, ctx context.Context, dec
 		FullMethod: AuctionService_Replicate_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AuctionServiceServer).Replicate(ctx, req.(*Data))
+		return srv.(AuctionServiceServer).Replicate(ctx, req.(*ReplicationData))
 	}
 	return interceptor(ctx, in, info, handler)
 }
