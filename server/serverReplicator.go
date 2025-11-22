@@ -1,4 +1,4 @@
-package server;
+package main;
 
 import (
 	"fmt"
@@ -19,11 +19,14 @@ const (
 	HoldElection MessageKind = iota
 	EnterElection
 	Winner
+
+	MakeBid
 )
 
 type Message struct {
 	info common.NodeInfo
 	kind MessageKind
+	bid Bid
 }
 
 type ServerConnection struct {
@@ -122,7 +125,6 @@ func (server *AucServer) HoldElectionHandler(otherInfo common.NodeInfo) error {
 				}
 			}
 		}
-
 	}
 
 	return nil
@@ -161,9 +163,21 @@ func (server *AucServer) ElectionWinnerHandler(otherInfo common.NodeInfo) error 
 	return nil
 }
 
+func (server *AucServer) WhoIsTheLeader(
+	ctx context.Context, req *proto.Nothing) (*proto.NodeInfo, error) {
+
+	for server.electionStatus.Load() != NoElection {
+		
+	}
+
+	return &proto.NodeInfo{ ConnectionAddr: server.leaderInfo.ConnectionAddr }, nil
+}
+
+
 func (server *AucServer) messageHandler() {
 	for {
 		msg := <- server.messages
+		log.Println("Read message")
 
 		switch msg.kind {
 		case HoldElection:
@@ -172,6 +186,13 @@ func (server *AucServer) messageHandler() {
 			server.EnterElectionHandler(msg.info)
 		case Winner:
 			server.ElectionWinnerHandler(msg.info)
+
+		case MakeBid:
+			if !server.isLeader.Load() {
+				log.Println("Got a bid, but I'm not the leader")
+				continue
+			}
+			server.BidHandler(msg.bid)
 		}
 	}
 }
@@ -198,31 +219,40 @@ func (server *AucServer) Replicate(
 	return &proto.Acknowledgement{}, nil
 }
 
-func (server *AucServer) AuctionHandler() {
+func (server *AucServer) Bid(
+	ctx context.Context, req *proto.ClientBid) (*proto.Acknowledgement, error) {
+
 	if !server.isLeader.Load() {
-		return
+		log.Println("Non leader got Bid")
+		return &proto.Acknowledgement{}, nil
 	}
-	var item = "a"
 
-	for {
-		data := proto.ReplicationData{ 
-			Kind: proto.ReplicationEventKind_Bid,  
-			Username: "nobody",
-			Amount: 0,
-			Item: item,
-		};
+	server.messages <- Message {kind: MakeBid, bid: Bid {
+		finalized: false,
+		bidder: req.Username,
+		item: req.Item,
+		bid: uint32(req.Amount),
+	}}
 
-		server.bids = append(server.bids, Bid{
-			finalized: false,
-			bidder: "nobody",
-			item: item,
-			bid: 0 })
+	return &proto.Acknowledgement{}, nil
+}
 
-		for _, node := range server.otherServers{
-			node.Replicate(context.Background(), &data)
+func (server *AucServer) BidHandler(bid Bid) error {
+	log.Printf("Got bid from: %s at %d for %s", bid.bidder, bid.bid, bid.item)
+	server.bids = append(server.bids, bid)
+
+	if server.isLeader.Load() {
+		data := proto.ReplicationData {
+			Kind: proto.ReplicationEventKind_Bid,
+			Username: bid.bidder,
+			Amount: bid.bid,
+			Item: bid.item,
+		} 
+		for _, conn := range server.otherServers {
+			conn.Replicate(context.Background(), &data)
 		}
 	}
-
+	return nil
 }
 
 func main() {

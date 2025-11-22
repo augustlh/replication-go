@@ -349,6 +349,66 @@ func (x *ReplicationData) GetItem() string {
 	return ""
 }
 
+type ClientBid struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Username      string                 `protobuf:"bytes,1,opt,name=username,proto3" json:"username,omitempty"`
+	Amount        uint32                 `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"`
+	Item          string                 `protobuf:"bytes,3,opt,name=item,proto3" json:"item,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClientBid) Reset() {
+	*x = ClientBid{}
+	mi := &file_grpc_replication_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClientBid) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClientBid) ProtoMessage() {}
+
+func (x *ClientBid) ProtoReflect() protoreflect.Message {
+	mi := &file_grpc_replication_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClientBid.ProtoReflect.Descriptor instead.
+func (*ClientBid) Descriptor() ([]byte, []int) {
+	return file_grpc_replication_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *ClientBid) GetUsername() string {
+	if x != nil {
+		return x.Username
+	}
+	return ""
+}
+
+func (x *ClientBid) GetAmount() uint32 {
+	if x != nil {
+		return x.Amount
+	}
+	return 0
+}
+
+func (x *ClientBid) GetItem() string {
+	if x != nil {
+		return x.Item
+	}
+	return ""
+}
+
 var File_grpc_replication_proto protoreflect.FileDescriptor
 
 const file_grpc_replication_proto_rawDesc = "" +
@@ -367,16 +427,22 @@ const file_grpc_replication_proto_rawDesc = "" +
 	"\x04kind\x18\x01 \x01(\x0e2\x1a.grpc.ReplicationEventKindR\x04kind\x12\x1a\n" +
 	"\busername\x18\x02 \x01(\tR\busername\x12\x16\n" +
 	"\x06amount\x18\x03 \x01(\rR\x06amount\x12\x12\n" +
-	"\x04item\x18\x04 \x01(\tR\x04item*+\n" +
+	"\x04item\x18\x04 \x01(\tR\x04item\"S\n" +
+	"\tClientBid\x12\x1a\n" +
+	"\busername\x18\x01 \x01(\tR\busername\x12\x16\n" +
+	"\x06amount\x18\x02 \x01(\rR\x06amount\x12\x12\n" +
+	"\x04item\x18\x03 \x01(\tR\x04item*+\n" +
 	"\x14ReplicationEventKind\x12\a\n" +
 	"\x03Bid\x10\x00\x12\n" +
 	"\n" +
-	"\x06Result\x10\x012\xf3\x01\n" +
+	"\x06Result\x10\x012\xd3\x02\n" +
 	"\x0eAuctionService\x125\n" +
 	"\fHoldElection\x12\x0e.grpc.NodeInfo\x1a\x15.grpc.Acknowledgement\x126\n" +
 	"\rEnterElection\x12\x0e.grpc.NodeInfo\x1a\x15.grpc.Acknowledgement\x127\n" +
 	"\x0eElectionWinner\x12\x0e.grpc.NodeInfo\x1a\x15.grpc.Acknowledgement\x129\n" +
-	"\tReplicate\x12\x15.grpc.ReplicationData\x1a\x15.grpc.AcknowledgementB\x15Z\x13replication-go/grpcb\x06proto3"
+	"\tReplicate\x12\x15.grpc.ReplicationData\x1a\x15.grpc.Acknowledgement\x12-\n" +
+	"\x03Bid\x12\x0f.grpc.ClientBid\x1a\x15.grpc.Acknowledgement\x12/\n" +
+	"\x0eWhoIsTheLeader\x12\r.grpc.Nothing\x1a\x0e.grpc.NodeInfoB\x15Z\x13replication-go/grpcb\x06proto3"
 
 var (
 	file_grpc_replication_proto_rawDescOnce sync.Once
@@ -391,7 +457,7 @@ func file_grpc_replication_proto_rawDescGZIP() []byte {
 }
 
 var file_grpc_replication_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_grpc_replication_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_grpc_replication_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_grpc_replication_proto_goTypes = []any{
 	(ReplicationEventKind)(0), // 0: grpc.ReplicationEventKind
 	(*Nothing)(nil),           // 1: grpc.Nothing
@@ -400,6 +466,7 @@ var file_grpc_replication_proto_goTypes = []any{
 	(*Amount)(nil),            // 4: grpc.Amount
 	(*Outcome)(nil),           // 5: grpc.Outcome
 	(*ReplicationData)(nil),   // 6: grpc.ReplicationData
+	(*ClientBid)(nil),         // 7: grpc.ClientBid
 }
 var file_grpc_replication_proto_depIdxs = []int32{
 	3, // 0: grpc.Amount.nodeInfo:type_name -> grpc.NodeInfo
@@ -409,12 +476,16 @@ var file_grpc_replication_proto_depIdxs = []int32{
 	3, // 4: grpc.AuctionService.EnterElection:input_type -> grpc.NodeInfo
 	3, // 5: grpc.AuctionService.ElectionWinner:input_type -> grpc.NodeInfo
 	6, // 6: grpc.AuctionService.Replicate:input_type -> grpc.ReplicationData
-	2, // 7: grpc.AuctionService.HoldElection:output_type -> grpc.Acknowledgement
-	2, // 8: grpc.AuctionService.EnterElection:output_type -> grpc.Acknowledgement
-	2, // 9: grpc.AuctionService.ElectionWinner:output_type -> grpc.Acknowledgement
-	2, // 10: grpc.AuctionService.Replicate:output_type -> grpc.Acknowledgement
-	7, // [7:11] is the sub-list for method output_type
-	3, // [3:7] is the sub-list for method input_type
+	7, // 7: grpc.AuctionService.Bid:input_type -> grpc.ClientBid
+	1, // 8: grpc.AuctionService.WhoIsTheLeader:input_type -> grpc.Nothing
+	2, // 9: grpc.AuctionService.HoldElection:output_type -> grpc.Acknowledgement
+	2, // 10: grpc.AuctionService.EnterElection:output_type -> grpc.Acknowledgement
+	2, // 11: grpc.AuctionService.ElectionWinner:output_type -> grpc.Acknowledgement
+	2, // 12: grpc.AuctionService.Replicate:output_type -> grpc.Acknowledgement
+	2, // 13: grpc.AuctionService.Bid:output_type -> grpc.Acknowledgement
+	3, // 14: grpc.AuctionService.WhoIsTheLeader:output_type -> grpc.NodeInfo
+	9, // [9:15] is the sub-list for method output_type
+	3, // [3:9] is the sub-list for method input_type
 	3, // [3:3] is the sub-list for extension type_name
 	3, // [3:3] is the sub-list for extension extendee
 	0, // [0:3] is the sub-list for field type_name
@@ -431,7 +502,7 @@ func file_grpc_replication_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_grpc_replication_proto_rawDesc), len(file_grpc_replication_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   6,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
