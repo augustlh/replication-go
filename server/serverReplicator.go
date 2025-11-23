@@ -60,7 +60,8 @@ type AucServer struct {
 
 	otherServers map[common.NodeInfo]proto.AuctionServiceClient
 
-	bids []Bid
+	bid Bid
+//	bids []Bid
 }
 
 func NewAucServer(info common.NodeInfo, leaderInfo *common.NodeInfo) *AucServer {
@@ -70,6 +71,11 @@ func NewAucServer(info common.NodeInfo, leaderInfo *common.NodeInfo) *AucServer 
 	server.otherServers = make(map[common.NodeInfo]proto.AuctionServiceClient);
 	server.messages = make(chan Message, 10);
 	server.electionStatus.Store(NoElection);
+
+	server.bid.bid = 0;
+	server.bid.item = "Generic Item";
+	server.bid.bidder = "Nobody";
+	server.bid.finalized = false;
 
 	if leaderInfo == nil {
 		server.isLeader.Store(true);
@@ -166,6 +172,7 @@ func (server *AucServer) ElectionWinnerHandler(otherInfo common.NodeInfo) error 
 func (server *AucServer) WhoIsTheLeader(
 	ctx context.Context, req *proto.Nothing) (*proto.NodeInfo, error) {
 
+	// Wait for ongoing election to finish before replying
 	for server.electionStatus.Load() != NoElection {
 		
 	}
@@ -210,11 +217,13 @@ func (server *AucServer) Replicate(
 	switch req.Kind {
 	case proto.ReplicationEventKind_Bid:
 		bid.finalized = false
-		server.bids = append(server.bids, bid)
+//		server.bids = append(server.bids, bid)
 	case proto.ReplicationEventKind_Result:
 		bid.finalized = true
-		server.bids = append(server.bids, bid)
+//		server.bids = append(server.bids, bid)
 	}
+
+	server.bid = bid
 
 	return &proto.Acknowledgement{}, nil
 }

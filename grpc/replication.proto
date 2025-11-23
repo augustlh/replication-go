@@ -55,8 +55,13 @@ service AuctionService {
   // REPLICATION RPC CALLS
   rpc Replicate(ReplicationData) returns (Acknowledgement);
 
-  rpc Bid(ClientBid) returns (Acknowledgement);
-
   rpc WhoIsTheLeader(Nothing) returns (NodeInfo);
+
+  rpc NewFollower(NodeInfo) returns (Acknowledgement);
+
+  // AUCTION RPC CALLS
+  rpc Bid(ClientBid) returns (Acknowledgement);
+  rpc Result(NodeInfo) returns (ClientBid);
+
 }
 
