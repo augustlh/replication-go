@@ -1,8 +1,10 @@
 package main
 
 import (
+	"os"
 	"fmt"
 	"log"
+	"strconv"
 	"context"
 	"replication-go/common"
 	proto "replication-go/grpc"
@@ -14,41 +16,50 @@ type Client struct {
 	conn proto.AuctionServiceClient
 }
 
-func NewClientConnection(node common.NodeInfo) (proto.AuctionServiceClient, error) {
+func NewClientConnection(node common.NodeInfo) (proto.AuctionServiceClient, *grpc.ClientConn, error) {
 	conn, err := grpc.NewClient(node.ConnectionAddr, 
 		grpc.WithTransportCredentials(insecure.NewCredentials()));
 
 	if err != nil {
 		log.Printf("Error connecting: %s", err.Error())
-		return nil, err
+		return nil, nil, err
 	}
-	return proto.NewAuctionServiceClient(conn), nil
+	return proto.NewAuctionServiceClient(conn), conn, nil
 }
 
-func NewClient(node common.NodeInfo) *Client {
+func NewClient(file string) *Client {
 	client := new(Client)
 
-	conn, err := NewClientConnection(node)
+	nodes, err := common.ReadServerFile(file)
 	if err != nil {
-		panic(fmt.Sprintf("Could not connect to node: %s", node.ConnectionAddr))
+		panic(fmt.Sprintf("Could not load servers from %s - %s", file, err.Error()))
 	}
 
-	client.conn = conn
+	for _, node := range nodes {
+		conn, tcpConn, err := NewClientConnection(node)
+		if err != nil {
+			continue
+		}
 
-	leaderInfo, err := client.conn.WhoIsTheLeader(context.Background(), &proto.Nothing{})
-
-	if err != nil {
-		panic("Could not determine leader node")
-	}
-
-	if leaderInfo.ConnectionAddr != node.ConnectionAddr {
-		newConn, err := NewClientConnection(common.NodeInfo { 
-			ConnectionAddr: leaderInfo.ConnectionAddr })
+		leaderInfo, err := conn.WhoIsTheLeader(context.Background(), &proto.Nothing{})
 
 		if err != nil {
-			panic("Could not connect to leader node")
+			continue
+			panic("Could not determine leader node")
 		}
-		client.conn = newConn
+
+		if node.ConnectionAddr != leaderInfo.ConnectionAddr {
+			tcpConn.Close()
+			conn, _, err := NewClientConnection( 
+				common.NodeInfo {ConnectionAddr: leaderInfo.ConnectionAddr},
+				)
+
+			if err != nil { panic(err.Error()) }
+
+			client.conn = conn
+		} else {
+			client.conn = conn
+		}
 	}
 
 	return client
@@ -59,12 +70,48 @@ func (client *Client) MakeBid() {
 	client.conn.Bid(context.Background(), &bid)
 }
 
+func PrintHelp() {
+	fmt.Printf("Make bid:\n")
+	fmt.Printf("./client [username] [positive bid amount]\n")
+	fmt.Printf("Check current result/status:\n")
+	fmt.Printf("./client result\n")
+}
+
+func Result(client *Client) {
+}
+
+func Bid(client *Client) {
+	if len(os.Args) < 3 {
+		PrintHelp()
+		return
+	}
+
+	bidAmount, err := strconv.Atoi(os.Args[2])
+	if err != nil || bidAmount <= 0 {
+		PrintHelp()
+		return
+	}
+
+	username := os.Args[1]
+
+	bid := proto.ClientBid{Username: username, Amount: uint32(bidAmount), Item: "Something"}
+	client.conn.Bid(context.Background(), &bid)
+}
+
 func main() {
-	info := common.NodeInfo { ConnectionAddr: "localhost:5000" }
+	if len(os.Args) < 2 {
+		PrintHelp()
+		return
+	}
 
-	client := NewClient(info)
+	client := NewClient("./servers.txt")
 
-	client.MakeBid()
+	if os.Args[1] == "result" {
+		Result(client)
+	} else {
+		Bid(client)
+	}
+
 
 }
 

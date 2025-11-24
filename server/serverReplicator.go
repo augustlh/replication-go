@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"log"
 	"context"
+	"google.golang.org/grpc/credentials/insecure"
 	"sync/atomic"
 	"replication-go/common"
 	atm "replication-go/generic_atomic"
@@ -32,7 +34,37 @@ type Message struct {
 type ServerConnection struct {
 	info common.NodeInfo
 	conn proto.AuctionServiceClient
+	grpcConn *grpc.ClientConn
 	assumedDead bool
+}
+
+func (serverConnection *ServerConnection) AssumedDead() bool {
+	return serverConnection.grpcConn == nil || serverConnection.conn == nil || serverConnection.assumedDead
+}
+
+func (serverConnection *ServerConnection) Close() {
+	if serverConnection.grpcConn != nil {
+		serverConnection.grpcConn.Close()
+	}
+}
+
+func (serverConnection *ServerConnection) Reconnect() bool {
+	if !serverConnection.AssumedDead() {
+		serverConnection.grpcConn.Close();
+	}
+
+	conn, err := grpc.NewClient(serverConnection.info.ConnectionAddr, 
+		grpc.WithTransportCredentials(insecure.NewCredentials()));
+
+	if err != nil {
+		log.Printf("Error connecting: %s", err.Error())
+		return false
+	}
+
+	serverConnection.grpcConn = conn
+	serverConnection.conn = proto.NewAuctionServiceClient(serverConnection.grpcConn)
+	serverConnection.assumedDead = false
+	return true
 }
 
 type Bid struct {
@@ -58,47 +90,65 @@ type AucServer struct {
 	isLeader atomic.Bool
 	electionStatus atm.GenericAtomic[ElectionState]
 
-	otherServers map[common.NodeInfo]proto.AuctionServiceClient
+	otherServers map[common.NodeInfo]ServerConnection
 
-	bid Bid
+	bid atm.GenericAtomic[Bid]
 //	bids []Bid
 }
 
-func NewAucServer(info common.NodeInfo, leaderInfo *common.NodeInfo) *AucServer {
+func NewAucServer(id uint, nodes []common.NodeInfo) *AucServer {
 	server := new(AucServer);
 
-	server.serverInfo = info;
-	server.otherServers = make(map[common.NodeInfo]proto.AuctionServiceClient);
+	if int(id) >= len(nodes) {
+		panic(fmt.Sprintf("Index out of bounds: %d for %v", id, nodes))
+	}
+
+	server.serverInfo = nodes[id];
+	server.otherServers = make(map[common.NodeInfo]ServerConnection, len(nodes));
 	server.messages = make(chan Message, 10);
 	server.electionStatus.Store(NoElection);
 
-	server.bid.bid = 0;
-	server.bid.item = "Generic Item";
-	server.bid.bidder = "Nobody";
-	server.bid.finalized = false;
+	for i, v := range nodes {
+		if uint(i) == id {
+			continue
+		}
 
-	if leaderInfo == nil {
-		server.isLeader.Store(true);
-		server.leaderInfo = server.serverInfo;
-	} else {
-		server.isLeader.Store(false);
-		server.leaderInfo = *leaderInfo;
+		server.otherServers[v] = ServerConnection {
+			info: common.NodeInfo { ConnectionAddr: v.ConnectionAddr },
+			assumedDead: true,
+		}
+
 	}
+
+	for _, v := range server.otherServers {
+		v.Reconnect()
+	}
+
+	server.bid.Store( Bid { bid: 0, item: "Generic item", bidder: "Nobody", finalized: false } )
+
+	server.isLeader.Store(false);
 
 	return server;
 }
 
-func (server *AucServer) Serve() {
+func (server *AucServer) Serve(id uint, nodes []common.NodeInfo) {
 	grpcServer := grpc.NewServer();
 	proto.RegisterAuctionServiceServer(grpcServer, server);
 
-	tcpConnection, err := net.Listen("tcp", server.serverInfo.Get());
-
+	var err error
+	var tcpConnection net.Listener
+	for _, node := range nodes {
+		tcpConnection, err = net.Listen("tcp", node.ConnectionAddr);
+		if err == nil {
+			break
+		}
+	}
 	if err != nil {
-		panic(fmt.Sprintf("Server failed to bind to %s", server.serverInfo.Get()));
+		panic(fmt.Sprintf("Server failed to bind to any connection addr %v", nodes));
 	}
 
 	go server.messageHandler();
+	go server.bullyHandler();
 	grpcServer.Serve(tcpConnection);
 }
 
@@ -118,7 +168,7 @@ func (server *AucServer) HoldElectionHandler(otherInfo common.NodeInfo) error {
 	protoMessage := proto.NodeInfo{ConnectionAddr: server.serverInfo.Get()};
 	if otherInfo.LessThan(&server.serverInfo) {
 
-		server.otherServers[otherInfo].EnterElection(
+		server.otherServers[otherInfo].conn.EnterElection(
 			context.Background(), &protoMessage,
 		);
 
@@ -127,7 +177,13 @@ func (server *AucServer) HoldElectionHandler(otherInfo common.NodeInfo) error {
 		if server.electionStatus.CompareAndSwap(NoElection, RunningElection) {
 			for info, conn := range server.otherServers {
 				if server.serverInfo.LessThan(&info) {
-					conn.HoldElection(context.Background(), &protoMessage);
+					if conn.AssumedDead() {
+						continue
+					}
+					_, err := conn.conn.HoldElection(context.Background(), &protoMessage);
+					if err != nil {
+						conn.assumedDead = true
+					}
 				}
 			}
 		}
@@ -180,8 +236,59 @@ func (server *AucServer) WhoIsTheLeader(
 	return &proto.NodeInfo{ ConnectionAddr: server.leaderInfo.ConnectionAddr }, nil
 }
 
+func (server *AucServer) bullyHandler() {
+	selfInfo := proto.NodeInfo { ConnectionAddr: server.serverInfo.ConnectionAddr }
+
+	for {
+
+		if server.electionStatus.Load() != NoElection {
+			continue
+		}
+
+		if server.isLeader.Load() {
+			continue
+		}
+
+		if server.leaderInfo.ConnectionAddr != "" {
+			if !server.otherServers[server.leaderInfo].assumedDead {
+				continue
+			}
+		}
+
+		log.Println("Leader assumed dead, holding election")
+		server.electionStatus.CompareAndSwap(NoElection, RunningElection)
+
+		var greatest = true
+		for _, srv := range server.otherServers {
+			srv.Reconnect()
+			if srv.AssumedDead() {
+				continue
+			}
+
+			_, err := srv.conn.HoldElection(context.Background(), &selfInfo)
+			if err != nil { 
+				srv.assumedDead = true;
+			} else if server.leaderInfo.ConnectionAddr < srv.info.ConnectionAddr  {
+				greatest = false
+			}
+		}
+
+		if greatest {
+			log.Println("Greatest server ID still alive, declaring self as leader")
+			for _, srv := range server.otherServers {
+				if srv.AssumedDead() {
+					continue
+				}
+				srv.conn.ElectionWinner(context.Background(), &selfInfo)
+			}
+			server.isLeader.Store(true)
+			server.leaderInfo = server.serverInfo
+		}
+	}
+}
 
 func (server *AucServer) messageHandler() {
+	log.Printf("Starting message handler on %v", server.serverInfo)
 	for {
 		msg := <- server.messages
 		log.Println("Read message")
@@ -223,7 +330,7 @@ func (server *AucServer) Replicate(
 //		server.bids = append(server.bids, bid)
 	}
 
-	server.bid = bid
+	server.bid.Store(bid)
 
 	return &proto.Acknowledgement{}, nil
 }
@@ -248,9 +355,15 @@ func (server *AucServer) Bid(
 
 func (server *AucServer) BidHandler(bid Bid) error {
 	log.Printf("Got bid from: %s at %d for %s", bid.bidder, bid.bid, bid.item)
-	server.bids = append(server.bids, bid)
+	//server.bids = append(server.bids, bid)
 
 	if server.isLeader.Load() {
+		log.Println("Leader received the aforementioned bid")
+		if !server.bid.ComparePredicateAndSwap(func (b Bid) bool { return b.bid < bid.bid; }, bid) {
+			log.Printf("The bid is lower that the current, ignoring it")
+			return nil
+		}
+
 		data := proto.ReplicationData {
 			Kind: proto.ReplicationEventKind_Bid,
 			Username: bid.bidder,
@@ -258,19 +371,36 @@ func (server *AucServer) BidHandler(bid Bid) error {
 			Item: bid.item,
 		} 
 		for _, conn := range server.otherServers {
-			conn.Replicate(context.Background(), &data)
+			if conn.AssumedDead() {
+				continue
+			}
+			_, err := conn.conn.Replicate(context.Background(), &data)
+			if err != nil {
+				conn.assumedDead = true
+			}
 		}
 	}
 	return nil
 }
 
 func main() {
-	if len(os.Args) > 1 {
-		server := NewAucServer(common.NodeInfo { ConnectionAddr: "localhost:5001" }, &common.NodeInfo { ConnectionAddr: "localhost:5000" })
-		server.Serve()
-	} else {
-		server := NewAucServer(common.NodeInfo { ConnectionAddr: "localhost:5000" }, nil)
-		server.Serve()
+	nodes, err := common.ReadServerFile("./servers.txt")
+	if err != nil {
+		panic(err.Error())
 	}
+
+	if len(os.Args) < 2 {
+		println("Must provide 0-indexed id which refers to a line in './servers.txt'")
+		return
+	}
+
+	id, err := strconv.Atoi(os.Args[1])
+	if id < 0 || id >= len(nodes) {
+		fmt.Printf("ID out of bounds: %d for %v", id, nodes)
+		return
+	}
+
+	server := NewAucServer(uint(id), nodes)
+	server.Serve(uint(id), nodes)
 }
 

@@ -35,3 +35,16 @@ func (atm *GenericAtomic[T]) CompareAndSwap(before T, new T) bool {
 	return success;
 }
 
+func (atm *GenericAtomic[T]) ComparePredicateAndSwap(pred func (T) bool, new T) bool {
+	atm.mu.Lock();
+
+	var success = false;
+	if pred(atm.value) {
+		atm.value = new;
+		success = true;
+	}
+
+	atm.mu.Unlock();
+
+	return success;
+}
