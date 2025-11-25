@@ -14,8 +14,6 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-const defaultAddr = "localhost:50051"
-
 func main() {
 	if len(os.Args) < 2 {
 		usage()
@@ -64,7 +62,7 @@ func usage() {
 	fmt.Println("  client bid <bidder_id> <amount>")
 	fmt.Println("  client status")
 	fmt.Println()
-	fmt.Printf("nodes: AUCTION_NODES=\"host1:port1,host2:port2\" or AUCTION_ADDR (default %s)\n", defaultAddr)
+
 }
 
 func nodeAddrs() []string {

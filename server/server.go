@@ -8,8 +8,6 @@ import (
 	"flag"
 	"log"
 	"net"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -49,26 +47,6 @@ type Node struct {
 	auction *AuctionState
 	cluster ClusterState
 	peers   map[int64]*Peer
-}
-
-func parsePeers(raw string) map[int64]string {
-	m := make(map[int64]string)
-	if raw == "" {
-		return m
-	}
-	entries := strings.Split(raw, ",")
-	for _, e := range entries {
-		parts := strings.SplitN(strings.TrimSpace(e), "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
-		id, err := strconv.ParseInt(parts[0], 10, 64)
-		if err != nil {
-			continue
-		}
-		m[id] = parts[1]
-	}
-	return m
 }
 
 func NewNode(id int64, addr string, peers map[int64]string) *Node {
