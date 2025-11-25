@@ -22,6 +22,8 @@ const (
 	EnterElection
 	Winner
 
+	NewFollower
+
 	MakeBid
 )
 
@@ -52,6 +54,7 @@ func (serverConnection *ServerConnection) Reconnect() bool {
 	if !serverConnection.AssumedDead() {
 		serverConnection.grpcConn.Close();
 	}
+	serverConnection.assumedDead = true
 
 	conn, err := grpc.NewClient(serverConnection.info.ConnectionAddr, 
 		grpc.WithTransportCredentials(insecure.NewCredentials()));
@@ -63,7 +66,17 @@ func (serverConnection *ServerConnection) Reconnect() bool {
 
 	serverConnection.grpcConn = conn
 	serverConnection.conn = proto.NewAuctionServiceClient(serverConnection.grpcConn)
+
+	// check for pulse
+	_, err = serverConnection.conn.WhoIsTheLeader(context.Background(), &proto.Nothing{})
+
+	if err != nil {
+		log.Printf("Error checking server pulse: %s", err.Error())
+		return false
+	}
+
 	serverConnection.assumedDead = false
+
 	return true
 }
 
@@ -117,11 +130,24 @@ func NewAucServer(id uint, nodes []common.NodeInfo) *AucServer {
 			info: common.NodeInfo { ConnectionAddr: v.ConnectionAddr },
 			assumedDead: true,
 		}
-
 	}
 
-	for _, v := range server.otherServers {
-		v.Reconnect()
+	for i, v := range server.otherServers {
+		log.Printf("Attempting to connect to %v", i)
+
+		if v.Reconnect() {
+			log.Printf("Connection to %v successful, sending new follower message", i)
+			v.conn.NewFollower(context.Background(), &proto.NodeInfo{ConnectionAddr: server.serverInfo.ConnectionAddr})
+
+			leaderInfo, err := v.conn.WhoIsTheLeader(context.Background(), &proto.Nothing{})
+			if err != nil {
+				v.assumedDead = true
+				log.Printf("Connection to %v failed after sending message", i)
+				continue
+			}
+
+			server.leaderInfo.ConnectionAddr = leaderInfo.ConnectionAddr
+		}
 	}
 
 	server.bid.Store( Bid { bid: 0, item: "Generic item", bidder: "Nobody", finalized: false } )
@@ -164,6 +190,7 @@ func (server *AucServer) HoldElection(
 
 // 4
 func (server *AucServer) HoldElectionHandler(otherInfo common.NodeInfo) error {
+	log.Printf("Got hold election message from %s", otherInfo.ConnectionAddr)
 
 	protoMessage := proto.NodeInfo{ConnectionAddr: server.serverInfo.Get()};
 	if otherInfo.LessThan(&server.serverInfo) {
@@ -202,6 +229,7 @@ func (server *AucServer) EnterElection(
 }
 
 func (server *AucServer) EnterElectionHandler(otherInfo common.NodeInfo) error {
+	log.Printf("Got enter election message from %s", otherInfo.ConnectionAddr)
 	if server.serverInfo.LessThan(&otherInfo) {
 		server.electionStatus.Store(WaitingForVictoryMessage);
 	}
@@ -220,8 +248,10 @@ func (server *AucServer) ElectionWinner(
 }
 
 func (server *AucServer) ElectionWinnerHandler(otherInfo common.NodeInfo) error {
+	log.Printf("Got election winner message from %s", otherInfo.ConnectionAddr)
 	server.leaderInfo = otherInfo;
 	server.isLeader.Store(false);
+	server.electionStatus.Store(NoElection)
 	return nil
 }
 
@@ -234,6 +264,19 @@ func (server *AucServer) WhoIsTheLeader(
 	}
 
 	return &proto.NodeInfo{ ConnectionAddr: server.leaderInfo.ConnectionAddr }, nil
+}
+
+func (server *AucServer) NewFollower(
+	ctx context.Context,
+	req *proto.NodeInfo) (*proto.Acknowledgement, error) {
+
+	otherInfo := common.NodeInfoFromReq(req);
+
+	msg := Message{ info: otherInfo, kind: NewFollower }
+
+	server.messages <- msg
+
+	return &proto.Acknowledgement{}, nil
 }
 
 func (server *AucServer) bullyHandler() {
@@ -250,7 +293,8 @@ func (server *AucServer) bullyHandler() {
 		}
 
 		if server.leaderInfo.ConnectionAddr != "" {
-			if !server.otherServers[server.leaderInfo].assumedDead {
+			srv, found := server.otherServers[server.leaderInfo]
+			if found && !srv.AssumedDead() {
 				continue
 			}
 		}
@@ -260,8 +304,7 @@ func (server *AucServer) bullyHandler() {
 
 		var greatest = true
 		for _, srv := range server.otherServers {
-			srv.Reconnect()
-			if srv.AssumedDead() {
+			if !srv.Reconnect() {
 				continue
 			}
 
@@ -275,6 +318,7 @@ func (server *AucServer) bullyHandler() {
 
 		if greatest {
 			log.Println("Greatest server ID still alive, declaring self as leader")
+			server.electionStatus.Store(NoElection)
 			for _, srv := range server.otherServers {
 				if srv.AssumedDead() {
 					continue
@@ -285,6 +329,17 @@ func (server *AucServer) bullyHandler() {
 			server.leaderInfo = server.serverInfo
 		}
 	}
+}
+
+func (server *AucServer) NewFollowerHandler(info common.NodeInfo) {
+	log.Printf("Got new follower request from %v", info)
+	srv, found := server.otherServers[info]
+
+	if !found {
+		log.Printf("The follower request came from an unknown node %v", info)
+	}
+
+	srv.Reconnect()
 }
 
 func (server *AucServer) messageHandler() {
@@ -300,6 +355,9 @@ func (server *AucServer) messageHandler() {
 			server.EnterElectionHandler(msg.info)
 		case Winner:
 			server.ElectionWinnerHandler(msg.info)
+
+		case NewFollower:
+			server.NewFollowerHandler(msg.info)
 
 		case MakeBid:
 			if !server.isLeader.Load() {

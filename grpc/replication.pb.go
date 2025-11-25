@@ -435,14 +435,16 @@ const file_grpc_replication_proto_rawDesc = "" +
 	"\x14ReplicationEventKind\x12\a\n" +
 	"\x03Bid\x10\x00\x12\n" +
 	"\n" +
-	"\x06Result\x10\x012\xd3\x02\n" +
+	"\x06Result\x10\x012\xb4\x03\n" +
 	"\x0eAuctionService\x125\n" +
 	"\fHoldElection\x12\x0e.grpc.NodeInfo\x1a\x15.grpc.Acknowledgement\x126\n" +
 	"\rEnterElection\x12\x0e.grpc.NodeInfo\x1a\x15.grpc.Acknowledgement\x127\n" +
 	"\x0eElectionWinner\x12\x0e.grpc.NodeInfo\x1a\x15.grpc.Acknowledgement\x129\n" +
-	"\tReplicate\x12\x15.grpc.ReplicationData\x1a\x15.grpc.Acknowledgement\x12-\n" +
-	"\x03Bid\x12\x0f.grpc.ClientBid\x1a\x15.grpc.Acknowledgement\x12/\n" +
-	"\x0eWhoIsTheLeader\x12\r.grpc.Nothing\x1a\x0e.grpc.NodeInfoB\x15Z\x13replication-go/grpcb\x06proto3"
+	"\tReplicate\x12\x15.grpc.ReplicationData\x1a\x15.grpc.Acknowledgement\x12/\n" +
+	"\x0eWhoIsTheLeader\x12\r.grpc.Nothing\x1a\x0e.grpc.NodeInfo\x124\n" +
+	"\vNewFollower\x12\x0e.grpc.NodeInfo\x1a\x15.grpc.Acknowledgement\x12-\n" +
+	"\x03Bid\x12\x0f.grpc.ClientBid\x1a\x15.grpc.Acknowledgement\x12)\n" +
+	"\x06Result\x12\x0e.grpc.NodeInfo\x1a\x0f.grpc.ClientBidB\x15Z\x13replication-go/grpcb\x06proto3"
 
 var (
 	file_grpc_replication_proto_rawDescOnce sync.Once
@@ -469,26 +471,30 @@ var file_grpc_replication_proto_goTypes = []any{
 	(*ClientBid)(nil),         // 7: grpc.ClientBid
 }
 var file_grpc_replication_proto_depIdxs = []int32{
-	3, // 0: grpc.Amount.nodeInfo:type_name -> grpc.NodeInfo
-	3, // 1: grpc.Outcome.nodeInfo:type_name -> grpc.NodeInfo
-	0, // 2: grpc.ReplicationData.kind:type_name -> grpc.ReplicationEventKind
-	3, // 3: grpc.AuctionService.HoldElection:input_type -> grpc.NodeInfo
-	3, // 4: grpc.AuctionService.EnterElection:input_type -> grpc.NodeInfo
-	3, // 5: grpc.AuctionService.ElectionWinner:input_type -> grpc.NodeInfo
-	6, // 6: grpc.AuctionService.Replicate:input_type -> grpc.ReplicationData
-	7, // 7: grpc.AuctionService.Bid:input_type -> grpc.ClientBid
-	1, // 8: grpc.AuctionService.WhoIsTheLeader:input_type -> grpc.Nothing
-	2, // 9: grpc.AuctionService.HoldElection:output_type -> grpc.Acknowledgement
-	2, // 10: grpc.AuctionService.EnterElection:output_type -> grpc.Acknowledgement
-	2, // 11: grpc.AuctionService.ElectionWinner:output_type -> grpc.Acknowledgement
-	2, // 12: grpc.AuctionService.Replicate:output_type -> grpc.Acknowledgement
-	2, // 13: grpc.AuctionService.Bid:output_type -> grpc.Acknowledgement
-	3, // 14: grpc.AuctionService.WhoIsTheLeader:output_type -> grpc.NodeInfo
-	9, // [9:15] is the sub-list for method output_type
-	3, // [3:9] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	3,  // 0: grpc.Amount.nodeInfo:type_name -> grpc.NodeInfo
+	3,  // 1: grpc.Outcome.nodeInfo:type_name -> grpc.NodeInfo
+	0,  // 2: grpc.ReplicationData.kind:type_name -> grpc.ReplicationEventKind
+	3,  // 3: grpc.AuctionService.HoldElection:input_type -> grpc.NodeInfo
+	3,  // 4: grpc.AuctionService.EnterElection:input_type -> grpc.NodeInfo
+	3,  // 5: grpc.AuctionService.ElectionWinner:input_type -> grpc.NodeInfo
+	6,  // 6: grpc.AuctionService.Replicate:input_type -> grpc.ReplicationData
+	1,  // 7: grpc.AuctionService.WhoIsTheLeader:input_type -> grpc.Nothing
+	3,  // 8: grpc.AuctionService.NewFollower:input_type -> grpc.NodeInfo
+	7,  // 9: grpc.AuctionService.Bid:input_type -> grpc.ClientBid
+	3,  // 10: grpc.AuctionService.Result:input_type -> grpc.NodeInfo
+	2,  // 11: grpc.AuctionService.HoldElection:output_type -> grpc.Acknowledgement
+	2,  // 12: grpc.AuctionService.EnterElection:output_type -> grpc.Acknowledgement
+	2,  // 13: grpc.AuctionService.ElectionWinner:output_type -> grpc.Acknowledgement
+	2,  // 14: grpc.AuctionService.Replicate:output_type -> grpc.Acknowledgement
+	3,  // 15: grpc.AuctionService.WhoIsTheLeader:output_type -> grpc.NodeInfo
+	2,  // 16: grpc.AuctionService.NewFollower:output_type -> grpc.Acknowledgement
+	2,  // 17: grpc.AuctionService.Bid:output_type -> grpc.Acknowledgement
+	7,  // 18: grpc.AuctionService.Result:output_type -> grpc.ClientBid
+	11, // [11:19] is the sub-list for method output_type
+	3,  // [3:11] is the sub-list for method input_type
+	3,  // [3:3] is the sub-list for extension type_name
+	3,  // [3:3] is the sub-list for extension extendee
+	0,  // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_grpc_replication_proto_init() }
