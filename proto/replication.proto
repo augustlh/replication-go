@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+package proto;
+
+option go_package = "github.com/augustlh/replication-go/proto";
+
+service AuctionService {
+  rpc Bid(BidRequest) returns (BidResponse);
+  rpc Result(ResultRequest) returns (ResultResponse);
+
+  rpc CheckHealth(HealthRequest) returns (Heartbeat);
+
+  rpc Replicate(ReplicationRequest) returns (Ack);
+  rpc Connect(ConnectRequest) returns (Ack);
+}
+
+message ReplicationRequest {
+  uint32 log_index = 1;
+  BidRequest bid = 2;
+}
+
+message HealthRequest {}
+message Heartbeat {}
+
+
+message ConnectRequest {
+  uint32 id = 1;
+  string ip = 2;
+}
+
+
+message ResultRequest {}
+
+message ResultResponse {
+  string highest_bidder_id = 1;
+  uint32 highest_bid = 2;
+  bool finished = 3;
+}
+
+message BidRequest {
+  string client_id = 1;
+  uint32 amount = 2;
+}
+
+enum MessageType {
+  Error = 0;
+  Success = 1;
+}
+
+message BidResponse {
+  MessageType type = 1;
+  string message = 2;
+}
+
+message Ack {}
