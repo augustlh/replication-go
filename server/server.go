@@ -26,9 +26,8 @@ type AuctionState struct {
 }
 
 type ClusterState struct {
-	isLeader      bool
-	leaderID      int64
-	lastHeartbeat map[int64]time.Time
+	isLeader bool
+	leaderID int64
 }
 
 type Peer struct {
@@ -79,12 +78,10 @@ func NewNode(id int64, addr string, peers map[int64]string) *Node {
 			HighestBid:        0,
 			HighestBidder:     "",
 			Closed:            false,
-			Deadline:          time.Now().Add(1 * time.Minute),
+			Deadline:          time.Now().Add(5 * time.Minute),
 		},
-		cluster: ClusterState{
-			lastHeartbeat: make(map[int64]time.Time),
-		},
-		peers: make(map[int64]*Peer),
+		cluster: ClusterState{},
+		peers:   make(map[int64]*Peer),
 	}
 
 	leaderID := id
@@ -160,36 +157,49 @@ func (n *Node) ReplicateState(ctx context.Context, st *as.AuctionState) (*emptyp
 }
 
 func (n *Node) RegisterBidder(ctx context.Context, req *as.RegisterBidderReq) (*as.RegisterBidderResp, error) {
-	n.mu.Lock()
-	defer n.mu.Unlock()
+	n.mu.RLock()
+	isLeader := n.cluster.isLeader
+	leaderID := n.cluster.leaderID
+	leaderPeer := n.peers[leaderID]
+	n.mu.RUnlock()
 
-	if !n.cluster.isLeader {
-		return &as.RegisterBidderResp{Ok: false, Message: "not leader"}, nil
+	if !isLeader {
+		if leaderPeer == nil {
+			return &as.RegisterBidderResp{Ok: false, Message: "no leader available"}, nil
+		}
+		return leaderPeer.auctionClient.RegisterBidder(ctx, req)
 	}
 
+	n.mu.Lock()
 	for _, b := range n.auction.RegisteredBidders {
 		if b == req.BidderId {
+			n.mu.Unlock()
 			return &as.RegisterBidderResp{Ok: false, Message: "already registered"}, nil
 		}
 	}
-
 	n.auction.RegisteredBidders = append(n.auction.RegisteredBidders, req.BidderId)
-
 	n.mu.Unlock()
+
 	n.replicateState(ctx)
-	n.mu.Lock()
 
 	return &as.RegisterBidderResp{Ok: true, Message: ""}, nil
 }
 
 func (n *Node) PlaceBid(ctx context.Context, req *as.PlaceBidReq) (*as.PlaceBidResp, error) {
-	n.mu.Lock()
+	n.mu.RLock()
+	isLeader := n.cluster.isLeader
+	leaderID := n.cluster.leaderID
+	leaderPeer := n.peers[leaderID]
+	n.mu.RUnlock()
 
-	if !n.cluster.isLeader {
-		n.mu.Unlock()
-		return &as.PlaceBidResp{Accepted: false, Reason: "not leader"}, nil
+	if !isLeader {
+		if leaderPeer == nil {
+			return &as.PlaceBidResp{Accepted: false, Reason: "no leader available"}, nil
+		}
+		return leaderPeer.auctionClient.PlaceBid(ctx, req)
 	}
 
+	n.mu.Lock()
 	now := time.Now()
 
 	if n.auction.Closed || now.After(n.auction.Deadline) {
@@ -219,8 +229,8 @@ func (n *Node) PlaceBid(ctx context.Context, req *as.PlaceBidReq) (*as.PlaceBidR
 
 	n.auction.HighestBid = req.Amount
 	n.auction.HighestBidder = req.BidderId
-
 	n.mu.Unlock()
+
 	n.replicateState(ctx)
 
 	return &as.PlaceBidResp{Accepted: true, Reason: ""}, nil
@@ -252,7 +262,6 @@ func (n *Node) startHeartbeatLoop(heartbeatInterval time.Duration, heartbeatTime
 		n.mu.RUnlock()
 
 		if isLeader {
-			n.pruneDeadFollowers(heartbeatTimeout)
 			continue
 		}
 
@@ -267,23 +276,6 @@ func (n *Node) startHeartbeatLoop(heartbeatInterval time.Duration, heartbeatTime
 
 		if err != nil {
 			n.handleLeaderSuspected()
-		}
-	}
-}
-
-func (n *Node) pruneDeadFollowers(timeout time.Duration) {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
-	if !n.cluster.isLeader {
-		return
-	}
-
-	now := time.Now()
-	for id, last := range n.cluster.lastHeartbeat {
-		if now.Sub(last) > timeout {
-			delete(n.cluster.lastHeartbeat, id)
-			delete(n.peers, id)
 		}
 	}
 }
@@ -333,9 +325,6 @@ func (n *Node) handleLeaderSuspected() {
 }
 
 func (n *Node) Heartbeat(ctx context.Context, req *as.PingRequest) (*emptypb.Empty, error) {
-	n.mu.Lock()
-	n.cluster.lastHeartbeat[req.FromId] = time.Now()
-	n.mu.Unlock()
 	return &emptypb.Empty{}, nil
 }
 
