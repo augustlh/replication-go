@@ -161,14 +161,7 @@ func (server *AucServer) Serve(id uint, nodes []common.NodeInfo) {
 	grpcServer := grpc.NewServer();
 	proto.RegisterAuctionServiceServer(grpcServer, server);
 
-	var err error
-	var tcpConnection net.Listener
-	for _, node := range nodes {
-		tcpConnection, err = net.Listen("tcp", node.ConnectionAddr);
-		if err == nil {
-			break
-		}
-	}
+	tcpConnection, err := net.Listen("tcp", server.serverInfo.ConnectionAddr);
 	if err != nil {
 		panic(fmt.Sprintf("Server failed to bind to any connection addr %v", nodes));
 	}
