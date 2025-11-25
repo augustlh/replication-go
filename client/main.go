@@ -15,7 +15,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-const defaultAddr = "localhost:50051"
+const defaultAddr = "localhost:5001"
 
 func main() {
 	if len(os.Args) < 2 {
