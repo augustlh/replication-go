@@ -13,7 +13,7 @@ import (
 )
 
 type Client struct {
-	conn proto.AuctionServiceClient
+	conn []proto.AuctionServiceClient
 }
 
 func NewClientConnection(node common.NodeInfo) (proto.AuctionServiceClient, *grpc.ClientConn, error) {
@@ -36,38 +36,21 @@ func NewClient(file string) *Client {
 	}
 
 	for _, node := range nodes {
-		conn, tcpConn, err := NewClientConnection(node)
+		conn, _, err := NewClientConnection(node)
 		if err != nil {
 			continue
 		}
 
-		leaderInfo, err := conn.WhoIsTheLeader(context.Background(), &proto.Nothing{})
+		_, err = conn.Ping(context.Background(), &proto.Nothing{})
 
 		if err != nil {
 			continue
-			panic("Could not determine leader node")
 		}
 
-		if node.ConnectionAddr != leaderInfo.ConnectionAddr {
-			tcpConn.Close()
-			conn, _, err := NewClientConnection( 
-				common.NodeInfo {ConnectionAddr: leaderInfo.ConnectionAddr},
-				)
-
-			if err != nil { panic(err.Error()) }
-
-			client.conn = conn
-		} else {
-			client.conn = conn
-		}
+		client.conn = append(client.conn, conn)
 	}
 
 	return client
-}
-
-func (client *Client) MakeBid() {
-	bid := proto.ClientBid{Username: "example", Amount: 55, Item: "Something"}
-	client.conn.Bid(context.Background(), &bid)
 }
 
 func PrintHelp() {
@@ -77,7 +60,19 @@ func PrintHelp() {
 	fmt.Printf("./client result\n")
 }
 
-func Result(client *Client) {
+func Result(client *Client) (*proto.Outcome, bool){
+	for _, conn := range client.conn {
+		outcome, err := conn.Result(context.Background(), &proto.Nothing{})
+
+		if err != nil {
+			continue
+		}
+
+		return outcome, true
+	}
+
+	fmt.Printf("All servers are down, cannot see results\n")
+	return nil, false
 }
 
 func Bid(client *Client) {
@@ -94,8 +89,22 @@ func Bid(client *Client) {
 
 	username := os.Args[1]
 
-	bid := proto.ClientBid{Username: username, Amount: uint32(bidAmount), Item: "Something"}
-	client.conn.Bid(context.Background(), &bid)
+	outcome, success := Result(client)
+
+	if !success {
+		fmt.Println("All nodes are dead")
+		return
+	}
+
+	if outcome.IsFinal {
+		fmt.Println("Auction is over, cannot bid")
+		return
+	}
+
+	bid := proto.ClientBid{Username: username, Amount: uint32(bidAmount), Item: outcome.Bid.Item}
+	for _, conn := range client.conn {
+		conn.Bid(context.Background(), &bid)
+	}
 }
 
 func main() {
@@ -107,7 +116,20 @@ func main() {
 	client := NewClient("./servers.txt")
 
 	if os.Args[1] == "result" {
-		Result(client)
+		outcome, success := Result(client)
+		
+		if !success {
+			fmt.Printf("All nodes dead, cannot get result\n")
+			return
+		}
+
+		if outcome.IsFinal {
+			fmt.Printf("Final outcome: %s won with bid at %d for %s\n",
+				outcome.Bid.Username, outcome.Bid.Amount, outcome.Bid.Item)
+		} else {
+			fmt.Printf("Ongoing auction: %s with bid at %d for %s\n",
+				outcome.Bid.Username, outcome.Bid.Amount, outcome.Bid.Item)
+		}
 	} else {
 		Bid(client)
 	}

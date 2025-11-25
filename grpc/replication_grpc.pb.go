@@ -19,34 +19,19 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AuctionService_HoldElection_FullMethodName   = "/grpc.AuctionService/HoldElection"
-	AuctionService_EnterElection_FullMethodName  = "/grpc.AuctionService/EnterElection"
-	AuctionService_ElectionWinner_FullMethodName = "/grpc.AuctionService/ElectionWinner"
-	AuctionService_Replicate_FullMethodName      = "/grpc.AuctionService/Replicate"
-	AuctionService_WhoIsTheLeader_FullMethodName = "/grpc.AuctionService/WhoIsTheLeader"
-	AuctionService_NewFollower_FullMethodName    = "/grpc.AuctionService/NewFollower"
-	AuctionService_Bid_FullMethodName            = "/grpc.AuctionService/Bid"
-	AuctionService_Result_FullMethodName         = "/grpc.AuctionService/Result"
+	AuctionService_Bid_FullMethodName    = "/grpc.AuctionService/Bid"
+	AuctionService_Result_FullMethodName = "/grpc.AuctionService/Result"
+	AuctionService_Ping_FullMethodName   = "/grpc.AuctionService/Ping"
 )
 
 // AuctionServiceClient is the client API for AuctionService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type AuctionServiceClient interface {
-	// BULLY ELECTION ALGORITHM RPC CALLS
-	// Node sends this to start an election
-	HoldElection(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*Acknowledgement, error)
-	// Node sends this to indicate that it's still alive + enter the election
-	EnterElection(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*Acknowledgement, error)
-	// The winner of the election sends this to indicate that they won
-	ElectionWinner(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*Acknowledgement, error)
-	// REPLICATION RPC CALLS
-	Replicate(ctx context.Context, in *ReplicationData, opts ...grpc.CallOption) (*Acknowledgement, error)
-	WhoIsTheLeader(ctx context.Context, in *Nothing, opts ...grpc.CallOption) (*NodeInfo, error)
-	NewFollower(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*Acknowledgement, error)
 	// AUCTION RPC CALLS
 	Bid(ctx context.Context, in *ClientBid, opts ...grpc.CallOption) (*Acknowledgement, error)
-	Result(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*ClientBid, error)
+	Result(ctx context.Context, in *Nothing, opts ...grpc.CallOption) (*Outcome, error)
+	Ping(ctx context.Context, in *Nothing, opts ...grpc.CallOption) (*Nothing, error)
 }
 
 type auctionServiceClient struct {
@@ -55,66 +40,6 @@ type auctionServiceClient struct {
 
 func NewAuctionServiceClient(cc grpc.ClientConnInterface) AuctionServiceClient {
 	return &auctionServiceClient{cc}
-}
-
-func (c *auctionServiceClient) HoldElection(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*Acknowledgement, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Acknowledgement)
-	err := c.cc.Invoke(ctx, AuctionService_HoldElection_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *auctionServiceClient) EnterElection(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*Acknowledgement, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Acknowledgement)
-	err := c.cc.Invoke(ctx, AuctionService_EnterElection_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *auctionServiceClient) ElectionWinner(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*Acknowledgement, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Acknowledgement)
-	err := c.cc.Invoke(ctx, AuctionService_ElectionWinner_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *auctionServiceClient) Replicate(ctx context.Context, in *ReplicationData, opts ...grpc.CallOption) (*Acknowledgement, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Acknowledgement)
-	err := c.cc.Invoke(ctx, AuctionService_Replicate_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *auctionServiceClient) WhoIsTheLeader(ctx context.Context, in *Nothing, opts ...grpc.CallOption) (*NodeInfo, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(NodeInfo)
-	err := c.cc.Invoke(ctx, AuctionService_WhoIsTheLeader_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *auctionServiceClient) NewFollower(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*Acknowledgement, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Acknowledgement)
-	err := c.cc.Invoke(ctx, AuctionService_NewFollower_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
 }
 
 func (c *auctionServiceClient) Bid(ctx context.Context, in *ClientBid, opts ...grpc.CallOption) (*Acknowledgement, error) {
@@ -127,10 +52,20 @@ func (c *auctionServiceClient) Bid(ctx context.Context, in *ClientBid, opts ...g
 	return out, nil
 }
 
-func (c *auctionServiceClient) Result(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (*ClientBid, error) {
+func (c *auctionServiceClient) Result(ctx context.Context, in *Nothing, opts ...grpc.CallOption) (*Outcome, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ClientBid)
+	out := new(Outcome)
 	err := c.cc.Invoke(ctx, AuctionService_Result_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *auctionServiceClient) Ping(ctx context.Context, in *Nothing, opts ...grpc.CallOption) (*Nothing, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Nothing)
+	err := c.cc.Invoke(ctx, AuctionService_Ping_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -141,20 +76,10 @@ func (c *auctionServiceClient) Result(ctx context.Context, in *NodeInfo, opts ..
 // All implementations must embed UnimplementedAuctionServiceServer
 // for forward compatibility.
 type AuctionServiceServer interface {
-	// BULLY ELECTION ALGORITHM RPC CALLS
-	// Node sends this to start an election
-	HoldElection(context.Context, *NodeInfo) (*Acknowledgement, error)
-	// Node sends this to indicate that it's still alive + enter the election
-	EnterElection(context.Context, *NodeInfo) (*Acknowledgement, error)
-	// The winner of the election sends this to indicate that they won
-	ElectionWinner(context.Context, *NodeInfo) (*Acknowledgement, error)
-	// REPLICATION RPC CALLS
-	Replicate(context.Context, *ReplicationData) (*Acknowledgement, error)
-	WhoIsTheLeader(context.Context, *Nothing) (*NodeInfo, error)
-	NewFollower(context.Context, *NodeInfo) (*Acknowledgement, error)
 	// AUCTION RPC CALLS
 	Bid(context.Context, *ClientBid) (*Acknowledgement, error)
-	Result(context.Context, *NodeInfo) (*ClientBid, error)
+	Result(context.Context, *Nothing) (*Outcome, error)
+	Ping(context.Context, *Nothing) (*Nothing, error)
 	mustEmbedUnimplementedAuctionServiceServer()
 }
 
@@ -165,29 +90,14 @@ type AuctionServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedAuctionServiceServer struct{}
 
-func (UnimplementedAuctionServiceServer) HoldElection(context.Context, *NodeInfo) (*Acknowledgement, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method HoldElection not implemented")
-}
-func (UnimplementedAuctionServiceServer) EnterElection(context.Context, *NodeInfo) (*Acknowledgement, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method EnterElection not implemented")
-}
-func (UnimplementedAuctionServiceServer) ElectionWinner(context.Context, *NodeInfo) (*Acknowledgement, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ElectionWinner not implemented")
-}
-func (UnimplementedAuctionServiceServer) Replicate(context.Context, *ReplicationData) (*Acknowledgement, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Replicate not implemented")
-}
-func (UnimplementedAuctionServiceServer) WhoIsTheLeader(context.Context, *Nothing) (*NodeInfo, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method WhoIsTheLeader not implemented")
-}
-func (UnimplementedAuctionServiceServer) NewFollower(context.Context, *NodeInfo) (*Acknowledgement, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method NewFollower not implemented")
-}
 func (UnimplementedAuctionServiceServer) Bid(context.Context, *ClientBid) (*Acknowledgement, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Bid not implemented")
 }
-func (UnimplementedAuctionServiceServer) Result(context.Context, *NodeInfo) (*ClientBid, error) {
+func (UnimplementedAuctionServiceServer) Result(context.Context, *Nothing) (*Outcome, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Result not implemented")
+}
+func (UnimplementedAuctionServiceServer) Ping(context.Context, *Nothing) (*Nothing, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Ping not implemented")
 }
 func (UnimplementedAuctionServiceServer) mustEmbedUnimplementedAuctionServiceServer() {}
 func (UnimplementedAuctionServiceServer) testEmbeddedByValue()                        {}
@@ -210,114 +120,6 @@ func RegisterAuctionServiceServer(s grpc.ServiceRegistrar, srv AuctionServiceSer
 	s.RegisterService(&AuctionService_ServiceDesc, srv)
 }
 
-func _AuctionService_HoldElection_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(NodeInfo)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AuctionServiceServer).HoldElection(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: AuctionService_HoldElection_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AuctionServiceServer).HoldElection(ctx, req.(*NodeInfo))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _AuctionService_EnterElection_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(NodeInfo)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AuctionServiceServer).EnterElection(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: AuctionService_EnterElection_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AuctionServiceServer).EnterElection(ctx, req.(*NodeInfo))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _AuctionService_ElectionWinner_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(NodeInfo)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AuctionServiceServer).ElectionWinner(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: AuctionService_ElectionWinner_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AuctionServiceServer).ElectionWinner(ctx, req.(*NodeInfo))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _AuctionService_Replicate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReplicationData)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AuctionServiceServer).Replicate(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: AuctionService_Replicate_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AuctionServiceServer).Replicate(ctx, req.(*ReplicationData))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _AuctionService_WhoIsTheLeader_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Nothing)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AuctionServiceServer).WhoIsTheLeader(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: AuctionService_WhoIsTheLeader_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AuctionServiceServer).WhoIsTheLeader(ctx, req.(*Nothing))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _AuctionService_NewFollower_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(NodeInfo)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AuctionServiceServer).NewFollower(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: AuctionService_NewFollower_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AuctionServiceServer).NewFollower(ctx, req.(*NodeInfo))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _AuctionService_Bid_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ClientBid)
 	if err := dec(in); err != nil {
@@ -337,7 +139,7 @@ func _AuctionService_Bid_Handler(srv interface{}, ctx context.Context, dec func(
 }
 
 func _AuctionService_Result_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(NodeInfo)
+	in := new(Nothing)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -349,7 +151,25 @@ func _AuctionService_Result_Handler(srv interface{}, ctx context.Context, dec fu
 		FullMethod: AuctionService_Result_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AuctionServiceServer).Result(ctx, req.(*NodeInfo))
+		return srv.(AuctionServiceServer).Result(ctx, req.(*Nothing))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuctionService_Ping_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Nothing)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuctionServiceServer).Ping(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuctionService_Ping_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuctionServiceServer).Ping(ctx, req.(*Nothing))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -362,36 +182,16 @@ var AuctionService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*AuctionServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "HoldElection",
-			Handler:    _AuctionService_HoldElection_Handler,
-		},
-		{
-			MethodName: "EnterElection",
-			Handler:    _AuctionService_EnterElection_Handler,
-		},
-		{
-			MethodName: "ElectionWinner",
-			Handler:    _AuctionService_ElectionWinner_Handler,
-		},
-		{
-			MethodName: "Replicate",
-			Handler:    _AuctionService_Replicate_Handler,
-		},
-		{
-			MethodName: "WhoIsTheLeader",
-			Handler:    _AuctionService_WhoIsTheLeader_Handler,
-		},
-		{
-			MethodName: "NewFollower",
-			Handler:    _AuctionService_NewFollower_Handler,
-		},
-		{
 			MethodName: "Bid",
 			Handler:    _AuctionService_Bid_Handler,
 		},
 		{
 			MethodName: "Result",
 			Handler:    _AuctionService_Result_Handler,
+		},
+		{
+			MethodName: "Ping",
+			Handler:    _AuctionService_Ping_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

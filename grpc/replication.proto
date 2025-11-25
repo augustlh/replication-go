@@ -19,19 +19,8 @@ message Amount {
 }
 
 message Outcome {
-  NodeInfo nodeInfo = 1;
-}
-
-enum ReplicationEventKind {
-  Bid = 0;
-  Result = 1;
-}
-
-message ReplicationData {
-  ReplicationEventKind kind = 1;
-  string username = 2;
-  uint32 amount = 3;
-  string item = 4;
+  ClientBid bid = 1;
+  bool isFinal = 2;
 }
 
 message ClientBid {
@@ -42,26 +31,10 @@ message ClientBid {
 
 
 service AuctionService {
-  // BULLY ELECTION ALGORITHM RPC CALLS
-  // Node sends this to start an election
-  rpc HoldElection(NodeInfo) returns (Acknowledgement);
-
-  // Node sends this to indicate that it's still alive + enter the election
-  rpc EnterElection(NodeInfo) returns (Acknowledgement);
-
-  // The winner of the election sends this to indicate that they won
-  rpc ElectionWinner(NodeInfo) returns (Acknowledgement);
-
-  // REPLICATION RPC CALLS
-  rpc Replicate(ReplicationData) returns (Acknowledgement);
-
-  rpc WhoIsTheLeader(Nothing) returns (NodeInfo);
-
-  rpc NewFollower(NodeInfo) returns (Acknowledgement);
-
   // AUCTION RPC CALLS
   rpc Bid(ClientBid) returns (Acknowledgement);
-  rpc Result(NodeInfo) returns (ClientBid);
+  rpc Result(Nothing) returns (Outcome);
 
+  rpc Ping(Nothing) returns (Nothing);
 }
 
