@@ -101,8 +101,9 @@ func (server *AucServer) Ping(
 func (server *AucServer) BidHandler(bid Bid) error {
 	log.Printf("Got bid from: %s at %d for %s", bid.bidder, bid.bid, bid.item)
 
+	// Only accept bid if the bid is higher, if the bid item name matches and the current bid is still ongoing
 	result := server.bid.ComparePredicateAndSwap(func (b Bid) bool {
-		return b.bid < bid.bid && b.item == bid.item
+		return b.bid < bid.bid && b.item == bid.item && !b.finalized
 	}, bid)
 
 	if result {
