@@ -47,7 +47,7 @@ func ChangeLeader(nodes map[string]*NodeInfo, currentLeader **NodeInfo) {
 	for _, node := range nodes {
 		if node.alive && node != *currentLeader {
 			*currentLeader = node
-			fmt.Printf("Leader changed to %s\n", node.ip)
+			log.Printf("Leader changed to %s", node.ip)
 			return
 		}
 	}
@@ -56,7 +56,7 @@ func ChangeLeader(nodes map[string]*NodeInfo, currentLeader **NodeInfo) {
 
 func main() {
 	if len(os.Args) < 4 {
-		fmt.Printf("Usage: %s [node1_address] [node1_address] client_name]\n", os.Args[0])
+		fmt.Printf("Usage: %s [node1_address] [node2_address] client_name]\n", os.Args[0])
 		return
 	}
 
@@ -107,7 +107,7 @@ func main() {
 			}
 			res, err := currentLeader.client.Bid(context.Background(), req)
 			if err != nil {
-				fmt.Printf("Your bid did not go through: %v\n", err)
+				fmt.Printf("Please try again.\n")
 
 				currentLeader.alive = false
 				ChangeLeader(nodes, &currentLeader)
@@ -118,6 +118,9 @@ func main() {
 					fmt.Printf("Your bid was declined with the reason '%v'\n", res.Message)
 				case pb.MessageType_Success:
 					fmt.Printf("Your bid of '%v' was accepted\n", req.Amount)
+				case pb.MessageType_Unexpected:
+					fmt.Printf("Please try again.\n")
+					ChangeLeader(nodes, &currentLeader)
 				}
 			}
 

@@ -24,8 +24,9 @@ const (
 type MessageType int32
 
 const (
-	MessageType_Error   MessageType = 0
-	MessageType_Success MessageType = 1
+	MessageType_Error      MessageType = 0
+	MessageType_Success    MessageType = 1
+	MessageType_Unexpected MessageType = 2
 )
 
 // Enum value maps for MessageType.
@@ -33,10 +34,12 @@ var (
 	MessageType_name = map[int32]string{
 		0: "Error",
 		1: "Success",
+		2: "Unexpected",
 	}
 	MessageType_value = map[string]int32{
-		"Error":   0,
-		"Success": 1,
+		"Error":      0,
+		"Success":    1,
+		"Unexpected": 2,
 	}
 )
 
@@ -505,10 +508,12 @@ const file_proto_replication_proto_rawDesc = "" +
 	"\vBidResponse\x12&\n" +
 	"\x04type\x18\x01 \x01(\x0e2\x12.proto.MessageTypeR\x04type\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\"\x05\n" +
-	"\x03Ack*%\n" +
+	"\x03Ack*5\n" +
 	"\vMessageType\x12\t\n" +
 	"\x05Error\x10\x00\x12\v\n" +
-	"\aSuccess\x10\x012\x8e\x02\n" +
+	"\aSuccess\x10\x01\x12\x0e\n" +
+	"\n" +
+	"Unexpected\x10\x022\x8e\x02\n" +
 	"\x0eAuctionService\x12,\n" +
 	"\x03Bid\x12\x11.proto.BidRequest\x1a\x12.proto.BidResponse\x125\n" +
 	"\x06Result\x12\x14.proto.ResultRequest\x1a\x15.proto.ResultResponse\x125\n" +

@@ -45,6 +45,7 @@ message BidRequest {
 enum MessageType {
   Error = 0;
   Success = 1;
+  Unexpected = 2;
 }
 
 message BidResponse {

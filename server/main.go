@@ -90,7 +90,7 @@ func (n *Node) Bid(ctx context.Context, req *pb.BidRequest) (*pb.BidResponse, er
 
 	if n.currentLeader != n.id {
 		log.Printf("Received bid request, but refused it because I'm not the leader")
-		return &pb.BidResponse{Type: pb.MessageType_Error, Message: "I am not the leader, please contact the leader"}, nil
+		return &pb.BidResponse{Type: pb.MessageType_Unexpected, Message: "I am not the leader, please contact the leader"}, nil
 	}
 
 	logIndex := n.nextRequestId.Add(1) - 1
