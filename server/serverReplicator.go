@@ -101,9 +101,16 @@ func (server *AucServer) Ping(
 func (server *AucServer) BidHandler(bid Bid) error {
 	log.Printf("Got bid from: %s at %d for %s", bid.bidder, bid.bid, bid.item)
 
-	server.bid.ComparePredicateAndSwap(func (b Bid) bool {
+	result := server.bid.ComparePredicateAndSwap(func (b Bid) bool {
 		return b.bid < bid.bid && b.item == bid.item
 	}, bid)
+
+	if result {
+		log.Println("Bid accepted")
+	} else {
+		log.Println("Bid rejected")
+	}
+
 
 	return nil
 }
