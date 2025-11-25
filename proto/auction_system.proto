@@ -7,18 +7,15 @@ import "google/protobuf/timestamp.proto";
 option go_package = "auction_system/proto;auction_system";
 
 service AuctionService {
-  rpc RegisterBidder (RegisterBidderReq) returns (RegisterBidderResp);
-  rpc PlaceBid       (PlaceBidReq)       returns (PlaceBidResp);
+  rpc RegisterBidder (RegisterBidderReq)     returns (RegisterBidderResp);
+  rpc PlaceBid       (PlaceBidReq)           returns (PlaceBidResp);
   rpc GetStatus      (google.protobuf.Empty) returns (GetStatusResp);
 }
 
 service NodeService {
-  rpc Election       (ElectionRequest)    returns (ElectionResponse);
-  rpc AnnounceLeader (LeaderAnnouncement) returns (google.protobuf.Empty);
-  rpc Heartbeat      (PingRequest)        returns (google.protobuf.Empty);
-  rpc ReplicateState (AuctionState)       returns (google.protobuf.Empty);
+  rpc Heartbeat        (PingRequest) returns (google.protobuf.Empty);
+  rpc ReplicateRequest (PlaceBidReq) returns (google.protobuf.Empty);
 }
-
 message PingRequest {
   int64 from_id = 1;
 }
@@ -48,26 +45,4 @@ message GetStatusResp {
   string highest_bidder = 3;
   repeated string registered_bidders = 4;
   google.protobuf.Timestamp deadline = 5;
-}
-
-message AuctionState {
-  int64 auction_id = 1;
-  int64 highest_bid = 2;
-  string highest_bidder = 3;
-  bool closed = 4;
-  int64 deadline_unix = 5;
-  repeated string registered_bidders = 6;
-}
-
-message ElectionRequest {
-  int64 candidate_id = 1;
-}
-
-message ElectionResponse {
-  bool accepted = 1;
-  int64 responder_id = 2;
-}
-
-message LeaderAnnouncement {
-  int64 leader_id = 1;
 }

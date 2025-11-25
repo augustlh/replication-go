@@ -31,13 +31,6 @@ func main() {
 	defer conn.Close()
 
 	switch cmd {
-	case "register":
-		if len(os.Args) != 3 {
-			usage()
-			os.Exit(1)
-		}
-		doRegister(client, os.Args[2])
-
 	case "bid":
 		if len(os.Args) != 4 {
 			usage()
@@ -77,22 +70,6 @@ func nodeAddrs() []string {
 
 func contextWithTimeout() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), 2*time.Second)
-}
-
-func doRegister(client auction_system.AuctionServiceClient, bidderID string) {
-	ctx, cancel := contextWithTimeout()
-	defer cancel()
-
-	resp, err := client.RegisterBidder(ctx, &auction_system.RegisterBidderReq{
-		BidderId: bidderID,
-	})
-	if err != nil {
-		log.Fatalf("RegisterBidder: %v", err)
-	}
-
-	fmt.Println("register result:")
-	fmt.Printf("  ok:      %v\n", resp.Ok)
-	fmt.Printf("  message: %s\n", resp.Message)
 }
 
 func doBid(client auction_system.AuctionServiceClient, bidderID string, amount int64) {

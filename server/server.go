@@ -1,15 +1,15 @@
 package server
 
 import (
-	cfg "auction_system/config"
 	as "auction_system/proto"
+	"fmt"
+	"os"
+	"slices"
+	"strconv"
 
 	"context"
-	"flag"
 	"log"
 	"net"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -33,9 +33,10 @@ type ClusterState struct {
 }
 
 type Peer struct {
-	id            int64
-	nodeClient    as.NodeServiceClient
-	auctionClient as.AuctionServiceClient
+	id              int64
+	nodeClient      as.NodeServiceClient
+	auctionClient   as.AuctionServiceClient
+	isSuspectedDead bool
 }
 
 type Node struct {
@@ -48,30 +49,10 @@ type Node struct {
 	mu      sync.RWMutex
 	auction *AuctionState
 	cluster ClusterState
-	peers   map[int64]*Peer
+	peer    *Peer
 }
 
-func parsePeers(raw string) map[int64]string {
-	m := make(map[int64]string)
-	if raw == "" {
-		return m
-	}
-	entries := strings.Split(raw, ",")
-	for _, e := range entries {
-		parts := strings.SplitN(strings.TrimSpace(e), "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
-		id, err := strconv.ParseInt(parts[0], 10, 64)
-		if err != nil {
-			continue
-		}
-		m[id] = parts[1]
-	}
-	return m
-}
-
-func NewNode(id int64, addr string, peers map[int64]string) *Node {
+func NewNode(id int64, addr string, peerId int64, peerAddr string) *Node {
 	n := &Node{
 		id:   id,
 		addr: addr,
@@ -83,161 +64,92 @@ func NewNode(id int64, addr string, peers map[int64]string) *Node {
 			Deadline:          time.Now().Add(5 * time.Minute),
 		},
 		cluster: ClusterState{},
-		peers:   make(map[int64]*Peer),
+		peer:    nil,
 	}
 
-	leaderID := id
-	for pid := range peers {
-		if pid > leaderID {
-			leaderID = pid
-		}
-	}
+	leaderID := max(peerId, id)
 	n.cluster.leaderID = leaderID
 	n.cluster.isLeader = id == leaderID
 
-	for pid, paddr := range peers {
-		if pid == id {
-			continue
-		}
-
-		conn, err := grpc.NewClient(
-			paddr,
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		)
-		if err != nil {
-			panic(err)
-		}
-
-		n.peers[pid] = &Peer{
-			id:            pid,
-			auctionClient: as.NewAuctionServiceClient(conn),
-			nodeClient:    as.NewNodeServiceClient(conn),
-		}
+	conn, err := grpc.NewClient(peerAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		panic(err)
 	}
-
+	n.peer = &Peer{
+		id:            peerId,
+		auctionClient: as.NewAuctionServiceClient(conn),
+		nodeClient:    as.NewNodeServiceClient(conn),
+	}
 	return n
 }
 
-func NewNodeFromConfig(id int64) *Node {
-	var selfAddr string
-	peers := make(map[int64]string)
-
-	for _, n := range cfg.Nodes {
-		if n.ID == id {
-			selfAddr = n.Addr
-		} else {
-			peers[n.ID] = n.Addr
-		}
-	}
-
-	if selfAddr == "" {
-		log.Fatalf("node id %d not found in config.Nodes", id)
-	}
-
-	return NewNode(id, selfAddr, peers)
-}
-
-func (n *Node) toProtoState() *as.AuctionState {
-	return &as.AuctionState{
-		AuctionId:         0,
-		HighestBid:        n.auction.HighestBid,
-		HighestBidder:     n.auction.HighestBidder,
-		Closed:            n.auction.Closed,
-		DeadlineUnix:      n.auction.Deadline.Unix(),
-		RegisteredBidders: append([]string(nil), n.auction.RegisteredBidders...),
-	}
-}
-
-func (n *Node) applyProtoState(st *as.AuctionState) {
-	n.auction.HighestBid = st.HighestBid
-	n.auction.HighestBidder = st.HighestBidder
-	n.auction.Closed = st.Closed
-	n.auction.Deadline = time.Unix(st.DeadlineUnix, 0)
-	n.auction.RegisteredBidders = append([]string(nil), st.RegisteredBidders...)
-}
-
-func (n *Node) replicateState(ctx context.Context) {
-	n.mu.RLock()
-	st := n.toProtoState()
-	peers := make([]*Peer, 0, len(n.peers))
-	for _, p := range n.peers {
-		peers = append(peers, p)
-	}
-	n.mu.RUnlock()
-
-	for _, peer := range peers {
-		_, _ = peer.nodeClient.ReplicateState(ctx, st)
-	}
-}
-
-func (n *Node) ReplicateState(ctx context.Context, st *as.AuctionState) (*emptypb.Empty, error) {
+func (n *Node) ReplicateRequest(ctx context.Context, req *as.PlaceBidReq) (*emptypb.Empty, error) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	n.applyProtoState(st)
+
+	n.HandleBid(req)
+
 	return &emptypb.Empty{}, nil
+}
+
+func (n *Node) HandleBid(req *as.PlaceBidReq) *as.PlaceBidResp {
+	// You must hold the lock when entering this function, otherwise its not blocking!
+	now := time.Now()
+
+	if n.auction.Closed || now.After(n.auction.Deadline) {
+		n.auction.Closed = true
+		return &as.PlaceBidResp{Accepted: false, Reason: "auction closed"}
+	}
+
+	if !slices.Contains(n.auction.RegisteredBidders, req.BidderId) {
+		n.auction.RegisteredBidders = append(n.auction.RegisteredBidders, req.BidderId)
+	}
+
+	if req.Amount <= n.auction.HighestBid {
+		return &as.PlaceBidResp{Accepted: false, Reason: "bid too low"}
+	}
+
+	n.auction.HighestBid = req.Amount
+	n.auction.HighestBidder = req.BidderId
+
+	return &as.PlaceBidResp{Accepted: true, Reason: ""}
+
 }
 
 func (n *Node) PlaceBid(ctx context.Context, req *as.PlaceBidReq) (*as.PlaceBidResp, error) {
 	n.mu.RLock()
 	isLeader := n.cluster.isLeader
 	leaderID := n.cluster.leaderID
-	leaderPeer := n.peers[leaderID]
 	n.mu.RUnlock()
 
 	if !isLeader {
-		if leaderPeer == nil {
+		if leaderID == n.peer.id {
 			return &as.PlaceBidResp{Accepted: false, Reason: "no leader available"}, nil
 		}
-		return leaderPeer.auctionClient.PlaceBid(ctx, req)
+		return n.peer.auctionClient.PlaceBid(ctx, req)
 	}
 
 	n.mu.Lock()
-	now := time.Now()
+	defer n.mu.Unlock()
 
-	if n.auction.Closed || now.After(n.auction.Deadline) {
-		n.auction.Closed = true
-		n.mu.Unlock()
-		n.replicateState(ctx)
-		return &as.PlaceBidResp{Accepted: false, Reason: "auction closed"}, nil
-	}
+	n.peer.nodeClient.ReplicateRequest(context.Background(), req)
 
-	found := false
-	for _, b := range n.auction.RegisteredBidders {
-		if b == req.BidderId {
-			found = true
-			break
-		}
-	}
-	if !found {
-		n.auction.RegisteredBidders = append(n.auction.RegisteredBidders, req.BidderId)
-	}
+	res := n.HandleBid(req)
 
-	if req.Amount <= n.auction.HighestBid {
-		n.mu.Unlock()
-		return &as.PlaceBidResp{Accepted: false, Reason: "bid too low"}, nil
-	}
-
-	n.auction.HighestBid = req.Amount
-	n.auction.HighestBidder = req.BidderId
-	n.mu.Unlock()
-
-	n.replicateState(ctx)
-
-	return &as.PlaceBidResp{Accepted: true, Reason: ""}, nil
+	return res, nil
 }
 
 func (n *Node) GetStatus(ctx context.Context, _ *emptypb.Empty) (*as.GetStatusResp, error) {
 	n.mu.RLock()
 	isLeader := n.cluster.isLeader
 	leaderID := n.cluster.leaderID
-	leaderPeer := n.peers[leaderID]
 	n.mu.RUnlock()
 
 	if !isLeader {
-		if leaderPeer == nil {
+		if leaderID != n.peer.id {
 			return &as.GetStatusResp{Closed: true}, nil
 		}
-		return leaderPeer.auctionClient.GetStatus(ctx, &emptypb.Empty{})
+		return n.peer.auctionClient.GetStatus(ctx, &emptypb.Empty{})
 	}
 
 	n.mu.RLock()
@@ -260,16 +172,10 @@ func (n *Node) startHeartbeatLoop(heartbeatInterval time.Duration, heartbeatTime
 	for range ticker.C {
 		n.mu.RLock()
 		isLeader := n.cluster.isLeader
-		leaderID := n.cluster.leaderID
-		peer := n.peers[leaderID]
+		peer := n.peer
 		n.mu.RUnlock()
 
 		if isLeader {
-			continue
-		}
-
-		if peer == nil {
-			n.handleLeaderSuspected()
 			continue
 		}
 
@@ -278,6 +184,7 @@ func (n *Node) startHeartbeatLoop(heartbeatInterval time.Duration, heartbeatTime
 		cancel()
 
 		if err != nil {
+			n.peer.isSuspectedDead = true
 			n.handleLeaderSuspected()
 		}
 	}
@@ -287,43 +194,19 @@ func (n *Node) handleLeaderSuspected() {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
-	delete(n.peers, n.cluster.leaderID)
+	log.Printf("An election has been called. Running election...")
 
-	for _, peer := range n.peers {
-		if peer.id > n.id {
-			return
+	if n.id > n.peer.id || n.peer.isSuspectedDead {
+		if n.peer.isSuspectedDead {
+			log.Printf(" I think the peer is dead")
 		}
-	}
-
-	const electionTimeout = 2 * time.Second
-
-	for _, peer := range n.peers {
-		ctx, cancel := context.WithTimeout(context.Background(), electionTimeout)
-		resp, err := peer.nodeClient.Election(ctx, &as.ElectionRequest{
-			CandidateId: n.id,
-		})
-		cancel()
-
-		if err != nil {
-			continue
-		}
-
-		if !resp.Accepted {
-			return
-		}
-	}
-
-	n.cluster.leaderID = n.id
-	n.cluster.isLeader = true
-
-	const announceTimeout = 2 * time.Second
-
-	for _, peer := range n.peers {
-		ctx, cancel := context.WithTimeout(context.Background(), announceTimeout)
-		_, _ = peer.nodeClient.AnnounceLeader(ctx, &as.LeaderAnnouncement{
-			LeaderId: n.id,
-		})
-		cancel()
+		n.cluster.isLeader = true
+		n.cluster.leaderID = n.id
+		log.Printf("I won the election and I am now the leader!")
+	} else {
+		n.cluster.isLeader = false
+		n.cluster.leaderID = n.peer.id
+		log.Printf("I lost the election and '%v' is now the leader!", n.peer.id)
 	}
 }
 
@@ -331,32 +214,23 @@ func (n *Node) Heartbeat(context.Context, *as.PingRequest) (*emptypb.Empty, erro
 	return &emptypb.Empty{}, nil
 }
 
-func (n *Node) Election(_ context.Context, req *as.ElectionRequest) (*as.ElectionResponse, error) {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
-	accepted := req.CandidateId > n.id
-	return &as.ElectionResponse{Accepted: accepted, ResponderId: n.id}, nil
-}
-
-func (n *Node) AnnounceLeader(_ context.Context, req *as.LeaderAnnouncement) (*emptypb.Empty, error) {
-	n.mu.Lock()
-	n.cluster.leaderID = req.LeaderId
-	n.cluster.isLeader = n.id == req.LeaderId
-	n.mu.Unlock()
-	return &emptypb.Empty{}, nil
-}
-
 func Serve() {
-	idFlag := flag.Int("id", 0, "node id")
-	flag.Parse()
-
-	if *idFlag == 0 {
-		log.Fatalf("--id must be provided")
+	if len(os.Args) < 5 {
+		fmt.Printf("Incorrect arguments supplied. Usage: [id] [addr] [peerId] [peerAddr]\n")
+		os.Exit(1)
 	}
-	id := int64(*idFlag)
 
-	node := NewNodeFromConfig(id)
+	id, eID := strconv.ParseInt(os.Args[1], 10, 64)
+	addr := os.Args[2]
+	peerId, ePID := strconv.ParseInt(os.Args[3], 10, 64)
+	peerAddr := os.Args[4]
+
+	if eID != nil || ePID != nil {
+		fmt.Printf("Please use a number as id for the nodes!\n")
+		os.Exit(1)
+	}
+
+	node := NewNode(id, addr, peerId, peerAddr)
 
 	go node.startHeartbeatLoop(500*time.Millisecond, 2*time.Second)
 
