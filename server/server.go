@@ -238,6 +238,19 @@ func (n *Node) PlaceBid(ctx context.Context, req *as.PlaceBidReq) (*as.PlaceBidR
 
 func (n *Node) GetStatus(ctx context.Context, _ *emptypb.Empty) (*as.GetStatusResp, error) {
 	n.mu.RLock()
+	isLeader := n.cluster.isLeader
+	leaderID := n.cluster.leaderID
+	leaderPeer := n.peers[leaderID]
+	n.mu.RUnlock()
+
+	if !isLeader {
+		if leaderPeer == nil {
+			return &as.GetStatusResp{Closed: true}, nil
+		}
+		return leaderPeer.auctionClient.GetStatus(ctx, &emptypb.Empty{})
+	}
+
+	n.mu.RLock()
 	defer n.mu.RUnlock()
 
 	closed := n.auction.Closed || time.Now().After(n.auction.Deadline)
