@@ -1,7 +1,9 @@
 package server
 
 import (
+	cfg "auction_system/config"
 	as "auction_system/proto"
+
 	"context"
 	"flag"
 	"log"
@@ -114,6 +116,25 @@ func NewNode(id int64, addr string, peers map[int64]string) *Node {
 	}
 
 	return n
+}
+
+func NewNodeFromConfig(id int64) *Node {
+	var selfAddr string
+	peers := make(map[int64]string)
+
+	for _, n := range cfg.Nodes {
+		if n.ID == id {
+			selfAddr = n.Addr
+		} else {
+			peers[n.ID] = n.Addr
+		}
+	}
+
+	if selfAddr == "" {
+		log.Fatalf("node id %d not found in config.Nodes", id)
+	}
+
+	return NewNode(id, selfAddr, peers)
 }
 
 func (n *Node) toProtoState() *as.AuctionState {
@@ -359,15 +380,14 @@ func (n *Node) AnnounceLeader(_ context.Context, req *as.LeaderAnnouncement) (*e
 
 func Serve() {
 	idFlag := flag.Int("id", 0, "node id")
-	addrFlag := flag.String("addr", ":5000", "node address")
-	peersFlag := flag.String("peers", "", "comma-separated list of id=addr")
 	flag.Parse()
 
+	if *idFlag == 0 {
+		log.Fatalf("--id must be provided")
+	}
 	id := int64(*idFlag)
-	addr := *addrFlag
-	peers := parsePeers(*peersFlag)
 
-	node := NewNode(id, addr, peers)
+	node := NewNodeFromConfig(id)
 
 	go node.startHeartbeatLoop(500*time.Millisecond, 2*time.Second)
 

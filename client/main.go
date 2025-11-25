@@ -6,13 +6,11 @@ import (
 	"log"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
+	cfg "auction_system/config"
 	auction_system "auction_system/proto"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -26,13 +24,11 @@ func main() {
 
 	cmd := os.Args[1]
 
-	conn, err := connectAny(nodeAddrs())
+	conn, client, err := dialAny(nodeAddrs())
 	if err != nil {
 		log.Fatalf("connect: %v", err)
 	}
 	defer conn.Close()
-
-	client := auction_system.NewAuctionServiceClient(conn)
 
 	switch cmd {
 	case "register":
@@ -72,41 +68,11 @@ func usage() {
 }
 
 func nodeAddrs() []string {
-	if env := os.Getenv("AUCTION_NODES"); env != "" {
-		parts := strings.Split(env, ",")
-		var addrs []string
-		for _, p := range parts {
-			s := strings.TrimSpace(p)
-			if s != "" {
-				addrs = append(addrs, s)
-			}
-		}
-		if len(addrs) > 0 {
-			return addrs
-		}
+	addrs := make([]string, 0, len(cfg.Nodes))
+	for _, n := range cfg.Nodes {
+		addrs = append(addrs, n.Addr)
 	}
-	if env := os.Getenv("AUCTION_ADDR"); env != "" {
-		return []string{env}
-	}
-	return []string{defaultAddr}
-}
-
-func connectAny(addrs []string) (*grpc.ClientConn, error) {
-	var lastErr error
-	for _, addr := range addrs {
-		conn, err := grpc.NewClient(
-			addr,
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		)
-		if err == nil {
-			return conn, nil
-		}
-		lastErr = err
-	}
-	if lastErr != nil {
-		return nil, lastErr
-	}
-	return nil, fmt.Errorf("no addresses")
+	return addrs
 }
 
 func contextWithTimeout() (context.Context, context.CancelFunc) {
