@@ -15,6 +15,24 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+func ConnectToAuctionService(node common.NodeInfo) (proto.AuctionServiceClient, error) {
+	conn, err := grpc.NewClient(node.ConnectionAddr, 
+		grpc.WithTransportCredentials(insecure.NewCredentials()));
+
+	if err != nil {
+		return nil, err
+	}
+
+	serviceConn := proto.NewAuctionServiceClient(conn)
+
+	_, err = serviceConn.Ping(context.Background(), &proto.Nothing{})
+	if err != nil {
+		return nil, err
+	}
+
+	return serviceConn, nil
+}
+
 type Bid struct {
 	finalized bool
 	bidder string
@@ -68,21 +86,12 @@ func (server *AucServer) Serve() {
 	if server.isLeader {
 		log.Println("Waiting for replica to connect")
 		for {
-			conn, err := grpc.NewClient(server.peer.info.ConnectionAddr, 
-				grpc.WithTransportCredentials(insecure.NewCredentials()));
-
+			conn, err := ConnectToAuctionService(server.peer.info)
 			if err != nil {
 				continue
 			}
 
-			serviceConn := proto.NewAuctionServiceClient(conn)
-
-			_, err = serviceConn.Ping(context.Background(), &proto.Nothing{})
-			if err != nil {
-				continue
-			}
-
-			server.peer.conn = serviceConn
+			server.peer.conn = conn
 			break
 		}
 	} else {
@@ -98,21 +107,14 @@ func (server *AucServer) Serve() {
 }
 
 func (server *AucServer) ReplicaFalloverHandler() {
-	conn, err := grpc.NewClient(server.peer.info.ConnectionAddr, 
-		grpc.WithTransportCredentials(insecure.NewCredentials()));
+
+	conn, err := ConnectToAuctionService(server.peer.info)
 
 	if err != nil {
 		panic("Could not connect to leader, please start leader before replica")
 	}
 
-	serviceConn := proto.NewAuctionServiceClient(conn)
-
-	_, err = serviceConn.Ping(context.Background(), &proto.Nothing{})
-	if err != nil {
-		panic("Could not connect to leader, please start leader before replica")
-	}
-
-	server.peer.conn = serviceConn
+	server.peer.conn = conn
 
 	for {
 		time.Sleep(2*time.Second)
