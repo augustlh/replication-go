@@ -86,32 +86,39 @@ func NewNode(id int64, addr string, peerId int64, peerAddr string) *Node {
 func (n *Node) ReplicateRequest(ctx context.Context, req *as.PlaceBidReq) (*emptypb.Empty, error) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
+	log.Printf("Was asked to replicate request '%v'", &req)
 
 	n.HandleBid(req)
+	log.Printf("Finished replicating request '%v'", &req)
 
 	return &emptypb.Empty{}, nil
 }
 
 func (n *Node) HandleBid(req *as.PlaceBidReq) *as.PlaceBidResp {
 	// You must hold the lock when entering this function, otherwise its not blocking!
+	log.Printf("Handling bid '%v'", &req)
 	now := time.Now()
 
 	if n.auction.Closed || now.After(n.auction.Deadline) {
 		n.auction.Closed = true
+		log.Printf("Bid '%v' was rejected because the auction is over.", &req)
 		return &as.PlaceBidResp{Accepted: false, Reason: "auction closed"}
 	}
 
 	if !slices.Contains(n.auction.RegisteredBidders, req.BidderId) {
+		log.Printf("Bid '%v' was from a new client, adding to RegisteredBidders", &req)
 		n.auction.RegisteredBidders = append(n.auction.RegisteredBidders, req.BidderId)
 	}
 
 	if req.Amount <= n.auction.HighestBid {
+		log.Printf("Bid '%v' was rejected with reason: bid too low", &req)
 		return &as.PlaceBidResp{Accepted: false, Reason: "bid too low"}
 	}
 
 	n.auction.HighestBid = req.Amount
 	n.auction.HighestBidder = req.BidderId
 
+	log.Printf("Bid '%v' was accepted", &req)
 	return &as.PlaceBidResp{Accepted: true, Reason: ""}
 
 }
@@ -123,16 +130,21 @@ func (n *Node) PlaceBid(ctx context.Context, req *as.PlaceBidReq) (*as.PlaceBidR
 	n.mu.RUnlock()
 
 	if !isLeader {
-		if leaderID == n.peer.id {
+		if leaderID != n.peer.id {
+			log.Printf("Received bid request '%v' while no leader was available!", &req)
 			return &as.PlaceBidResp{Accepted: false, Reason: "no leader available"}, nil
 		}
+		log.Printf("Received bid request '%v' redirecting to leader!", &req)
 		return n.peer.auctionClient.PlaceBid(ctx, req)
 	}
 
 	n.mu.Lock()
 	defer n.mu.Unlock()
-
-	n.peer.nodeClient.ReplicateRequest(context.Background(), req)
+	log.Printf("Replicating request request '%v'", &req)
+	_, err := n.peer.nodeClient.ReplicateRequest(context.Background(), req)
+	if err != nil {
+		log.Printf("It seems my replica has crashed :(")
+	}
 
 	res := n.HandleBid(req)
 
@@ -140,6 +152,7 @@ func (n *Node) PlaceBid(ctx context.Context, req *as.PlaceBidReq) (*as.PlaceBidR
 }
 
 func (n *Node) GetStatus(ctx context.Context, _ *emptypb.Empty) (*as.GetStatusResp, error) {
+	log.Printf("Received get status request")
 	n.mu.RLock()
 	isLeader := n.cluster.isLeader
 	leaderID := n.cluster.leaderID
@@ -147,14 +160,18 @@ func (n *Node) GetStatus(ctx context.Context, _ *emptypb.Empty) (*as.GetStatusRe
 
 	if !isLeader {
 		if leaderID != n.peer.id {
+			log.Printf("Auction is closed")
 			return &as.GetStatusResp{Closed: true}, nil
 		}
+
+		log.Printf("Redirecting status request to leader")
 		return n.peer.auctionClient.GetStatus(ctx, &emptypb.Empty{})
 	}
 
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 
+	log.Printf("Sending status response")
 	closed := n.auction.Closed || time.Now().After(n.auction.Deadline)
 
 	return &as.GetStatusResp{
@@ -186,6 +203,7 @@ func (n *Node) startHeartbeatLoop(heartbeatInterval time.Duration, heartbeatTime
 		if err != nil {
 			n.peer.isSuspectedDead = true
 			n.handleLeaderSuspected()
+			continue
 		}
 	}
 }
@@ -243,6 +261,7 @@ func Serve() {
 	as.RegisterAuctionServiceServer(grpcServer, node)
 	as.RegisterNodeServiceServer(grpcServer, node)
 
+	log.Printf("Started listening to %v", addr)
 	if err := grpcServer.Serve(lis); err != nil {
 		log.Fatalf("serve: %v", err)
 	}
