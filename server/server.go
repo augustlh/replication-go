@@ -337,11 +337,11 @@ func (n *Node) handleLeaderSuspected() {
 	}
 }
 
-func (n *Node) Heartbeat(ctx context.Context, req *as.PingRequest) (*emptypb.Empty, error) {
+func (n *Node) Heartbeat(context.Context, *as.PingRequest) (*emptypb.Empty, error) {
 	return &emptypb.Empty{}, nil
 }
 
-func (n *Node) Election(ctx context.Context, req *as.ElectionRequest) (*as.ElectionResponse, error) {
+func (n *Node) Election(_ context.Context, req *as.ElectionRequest) (*as.ElectionResponse, error) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
@@ -349,7 +349,7 @@ func (n *Node) Election(ctx context.Context, req *as.ElectionRequest) (*as.Elect
 	return &as.ElectionResponse{Accepted: accepted, ResponderId: n.id}, nil
 }
 
-func (n *Node) AnnounceLeader(ctx context.Context, req *as.LeaderAnnouncement) (*emptypb.Empty, error) {
+func (n *Node) AnnounceLeader(_ context.Context, req *as.LeaderAnnouncement) (*emptypb.Empty, error) {
 	n.mu.Lock()
 	n.cluster.leaderID = req.LeaderId
 	n.cluster.isLeader = n.id == req.LeaderId
