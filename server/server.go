@@ -177,35 +177,6 @@ func (n *Node) ReplicateState(ctx context.Context, st *as.AuctionState) (*emptyp
 	return &emptypb.Empty{}, nil
 }
 
-func (n *Node) RegisterBidder(ctx context.Context, req *as.RegisterBidderReq) (*as.RegisterBidderResp, error) {
-	n.mu.RLock()
-	isLeader := n.cluster.isLeader
-	leaderID := n.cluster.leaderID
-	leaderPeer := n.peers[leaderID]
-	n.mu.RUnlock()
-
-	if !isLeader {
-		if leaderPeer == nil {
-			return &as.RegisterBidderResp{Ok: false, Message: "no leader available"}, nil
-		}
-		return leaderPeer.auctionClient.RegisterBidder(ctx, req)
-	}
-
-	n.mu.Lock()
-	for _, b := range n.auction.RegisteredBidders {
-		if b == req.BidderId {
-			n.mu.Unlock()
-			return &as.RegisterBidderResp{Ok: false, Message: "already registered"}, nil
-		}
-	}
-	n.auction.RegisteredBidders = append(n.auction.RegisteredBidders, req.BidderId)
-	n.mu.Unlock()
-
-	n.replicateState(ctx)
-
-	return &as.RegisterBidderResp{Ok: true, Message: ""}, nil
-}
-
 func (n *Node) PlaceBid(ctx context.Context, req *as.PlaceBidReq) (*as.PlaceBidResp, error) {
 	n.mu.RLock()
 	isLeader := n.cluster.isLeader
@@ -230,17 +201,15 @@ func (n *Node) PlaceBid(ctx context.Context, req *as.PlaceBidReq) (*as.PlaceBidR
 		return &as.PlaceBidResp{Accepted: false, Reason: "auction closed"}, nil
 	}
 
-	registered := false
+	found := false
 	for _, b := range n.auction.RegisteredBidders {
 		if b == req.BidderId {
-			registered = true
+			found = true
 			break
 		}
 	}
-
-	if !registered {
-		n.mu.Unlock()
-		return &as.PlaceBidResp{Accepted: false, Reason: "not registered"}, nil
+	if !found {
+		n.auction.RegisteredBidders = append(n.auction.RegisteredBidders, req.BidderId)
 	}
 
 	if req.Amount <= n.auction.HighestBid {
