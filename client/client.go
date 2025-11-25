@@ -13,7 +13,7 @@ import (
 )
 
 type Client struct {
-	conn []proto.AuctionServiceClient
+	conn proto.AuctionServiceClient
 }
 
 func NewClientConnection(node common.NodeInfo) (proto.AuctionServiceClient, *grpc.ClientConn, error) {
@@ -35,19 +35,29 @@ func NewClient(file string) *Client {
 		panic(fmt.Sprintf("Could not load servers from %s - %s", file, err.Error()))
 	}
 
+	if len(nodes) != 2 {
+		panic("Expected exactly 2 entries in server filer")
+	}
+
+
+	client.conn = nil
 	for _, node := range nodes {
 		conn, _, err := NewClientConnection(node)
 		if err != nil {
 			continue
 		}
 
-		_, err = conn.Ping(context.Background(), &proto.Nothing{})
+		result, err := conn.Ping(context.Background(), &proto.Nothing{})
 
-		if err != nil {
+		if err != nil || !result.IsLeader {
 			continue
 		}
 
-		client.conn = append(client.conn, conn)
+		client.conn = conn
+	}
+
+	if client.conn == nil {
+		panic("Could not connect to auction system")
 	}
 
 	return client
@@ -61,17 +71,13 @@ func PrintHelp() {
 }
 
 func Result(client *Client) (*proto.Outcome, bool){
-	for _, conn := range client.conn {
-		outcome, err := conn.Result(context.Background(), &proto.Nothing{})
+	outcome, err := client.conn.Result(context.Background(), &proto.Nothing{})
 
-		if err != nil {
-			continue
-		}
-
+	if err == nil {
 		return outcome, true
 	}
 
-	fmt.Printf("All servers are down, cannot see results\n")
+	fmt.Printf("Nodes are down, cannot see results: %s\n", err.Error())
 	return nil, false
 }
 
@@ -102,8 +108,12 @@ func Bid(client *Client) {
 	}
 
 	bid := proto.ClientBid{Username: username, Amount: uint32(bidAmount), Item: outcome.Bid.Item}
-	for _, conn := range client.conn {
-		conn.Bid(context.Background(), &bid)
+	status, err := client.conn.Bid(context.Background(), &bid)
+
+	if err != nil {
+		fmt.Println(err.Error())
+	} else {
+		fmt.Printf("Bid response: %v\n", status.Status)
 	}
 }
 

@@ -4,14 +4,15 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"strconv"
+	"time"
 	"log"
 	"context"
+	"sync"
 	"replication-go/common"
 	atm "replication-go/generic_atomic"
 	proto "replication-go/grpc"
 	"google.golang.org/grpc"
-	_ "google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 type Bid struct {
@@ -21,23 +22,34 @@ type Bid struct {
 	bid uint32
 }
 
+type Peer struct {
+	info common.NodeInfo
+	conn proto.AuctionServiceClient
+	assumedDead bool
+}
+
 type AucServer struct {
 	proto.UnimplementedAuctionServiceServer
 	serverInfo common.NodeInfo
+	peer Peer
+	isLeader bool
+	mu sync.Mutex
 
-	bids chan Bid
 	bid atm.GenericAtomic[Bid]
 }
 
-func NewAucServer(id uint, nodes []common.NodeInfo) *AucServer {
+func NewAucServer(info common.NodeInfo, peer common.NodeInfo) *AucServer {
 	server := new(AucServer);
 
-	if int(id) >= len(nodes) {
-		panic(fmt.Sprintf("Index out of bounds: %d for %v", id, nodes))
+	if info.ConnectionAddr == peer.ConnectionAddr {
+		panic("Server addr and Peer addr cannot be the same")
 	}
 
-	server.serverInfo = nodes[id];
-	server.bids = make(chan Bid, 10);
+	server.isLeader = info.ConnectionAddr > peer.ConnectionAddr
+	server.peer.info = peer
+	server.peer.assumedDead = false
+
+	server.serverInfo = info;
 
 	server.bid.Store( Bid { bid: 0, item: "Generic item", bidder: "Nobody", finalized: false } )
 
@@ -53,24 +65,89 @@ func (server *AucServer) Serve() {
 		panic(fmt.Sprintf("Server failed to bind to connection addr %v", server.serverInfo.ConnectionAddr));
 	}
 
-	go server.messageHandler();
+	if server.isLeader {
+		log.Println("Waiting for replica to connect")
+		for {
+			conn, err := grpc.NewClient(server.peer.info.ConnectionAddr, 
+				grpc.WithTransportCredentials(insecure.NewCredentials()));
+
+			if err != nil {
+				continue
+			}
+
+			serviceConn := proto.NewAuctionServiceClient(conn)
+
+			_, err = serviceConn.Ping(context.Background(), &proto.Nothing{})
+			if err != nil {
+				continue
+			}
+
+			server.peer.conn = serviceConn
+			break
+		}
+	} else {
+		log.Println("Starting replica, expecting leader to already be running")
+	}
+
+	log.Println("Serving...")
+
+	if !server.isLeader {
+		go server.ReplicaFalloverHandler()
+	}
 	grpcServer.Serve(tcpConnection);
 }
 
-func (server *AucServer) messageHandler() {
-	log.Printf("Starting message handler on %v", server.serverInfo)
+func (server *AucServer) ReplicaFalloverHandler() {
+	conn, err := grpc.NewClient(server.peer.info.ConnectionAddr, 
+		grpc.WithTransportCredentials(insecure.NewCredentials()));
+
+	if err != nil {
+		panic("Could not connect to leader, please start leader before replica")
+	}
+
+	serviceConn := proto.NewAuctionServiceClient(conn)
+
+	_, err = serviceConn.Ping(context.Background(), &proto.Nothing{})
+	if err != nil {
+		panic("Could not connect to leader, please start leader before replica")
+	}
+
+	server.peer.conn = serviceConn
+
 	for {
-		bid := <- server.bids
-		log.Println("Read bid: ", bid)
-		server.BidHandler(bid)
+		time.Sleep(2*time.Second)
+		log.Println("Checking if leader is still alive")
+
+		ctx, cancel := context.WithTimeout(context.Background(), 2 * time.Second)
+		_, err := server.peer.conn.Ping(ctx, &proto.Nothing{})
+		cancel()
+
+		if err != nil {
+			log.Println("Assuming leader is dead, performing failover")
+			server.isLeader = true
+			server.peer.assumedDead = true
+			break
+		}
 	}
 }
 
 func (server *AucServer) Result(
 	ctx context.Context, req *proto.Nothing) (*proto.Outcome, error) {
 
+	server.mu.Lock()
+	defer server.mu.Unlock()
+
+	log.Println("Got result request from client")
+
+	if !server.isLeader {
+		log.Println("This is the replica, ignoring request and returning error")
+		out := proto.Outcome {IsValid: false}
+		return &out, nil
+	}
+
 	bid := server.bid.Load()
 
+	log.Printf("Returning %v", bid)
 	out := proto.Outcome {
 		Bid: &proto.ClientBid { Username: bid.bidder, Amount: bid.bid, Item: bid.item  },
 		IsFinal: false,
@@ -79,41 +156,92 @@ func (server *AucServer) Result(
 	return &out, nil
 }
 
-func (server *AucServer) Bid(
-	ctx context.Context, req *proto.ClientBid) (*proto.Acknowledgement, error) {
+func (server *AucServer) Replicate(
+	ctx context.Context, req *proto.ClientBid) (*proto.Nothing, error) {
 
-	server.bids <- Bid {
+	bid := Bid {
 		finalized: false,
 		bidder: req.Username,
 		item: req.Item,
 		bid: uint32(req.Amount),
 	}
 
-	return &proto.Acknowledgement{}, nil
-}
+	log.Printf("Got replication for bid: %v", bid)
 
-func (server *AucServer) Ping(
-	ctx context.Context, req *proto.Nothing) (*proto.Nothing, error) {
+	if server.isLeader {
+		log.Println("This is the leader, ignoring replication")
+	} else {
+		log.Println("Storing replication data")
+		server.bid.Store(bid)
+	}
 
 	return &proto.Nothing{}, nil
 }
 
-func (server *AucServer) BidHandler(bid Bid) error {
-	log.Printf("Got bid from: %s at %d for %s", bid.bidder, bid.bid, bid.item)
+func (server *AucServer) Bid(
+	ctx context.Context, req *proto.ClientBid) (*proto.ClientBidResp, error) {
+
+	server.mu.Lock()
+	defer server.mu.Unlock()
+
+	log.Printf("Got bid from: %s at %d for %s", req.Username, req.Amount, req.Item)
+
+	if !server.isLeader {
+		log.Printf("This node is not the leader, ignoring bid and returning error")
+		out := proto.ClientBidResp {Status: proto.ClientBidStatus_ERROR}
+		return &out, nil
+	}
+
+	bid := Bid {
+		finalized: false,
+		bidder: req.Username,
+		item: req.Item,
+		bid: uint32(req.Amount),
+	}
+
 
 	// Only accept bid if the bid is higher, if the bid item name matches and the current bid is still ongoing
 	result := server.bid.ComparePredicateAndSwap(func (b Bid) bool {
 		return b.bid < bid.bid && b.item == bid.item && !b.finalized
 	}, bid)
 
+	out := proto.ClientBidResp {}
+
 	if result {
 		log.Println("Bid accepted")
+		out.Status = proto.ClientBidStatus_OK
+
+		if !server.peer.assumedDead {
+			_, err := server.peer.conn.Replicate(context.Background(), req)
+			if err != nil {
+				log.Println("Replica assumed dead")
+				server.peer.assumedDead = true
+			}
+		}
 	} else {
 		log.Println("Bid rejected")
+		out.Status = proto.ClientBidStatus_ERROR
 	}
 
+	server.bid.Store(bid)
 
-	return nil
+	return &out, nil
+}
+
+func (server *AucServer) Ping(
+	ctx context.Context, req *proto.Nothing) (*proto.IsLeader, error) {
+	server.mu.Lock()
+	defer server.mu.Unlock()
+
+	if server.isLeader {
+		log.Printf("Got a ping - informing pinger that this is the leader")
+	} else {
+		log.Printf("Got a ping - informing pinger that this is the replica")
+	}
+
+	out := proto.IsLeader{IsLeader: server.isLeader}
+
+	return &out, nil
 }
 
 func main() {
@@ -122,18 +250,27 @@ func main() {
 		panic(err.Error())
 	}
 
+	if len(nodes) != 2 {
+		println("Expected only 2 nodes in servers file. First line for the server and second for the replica")
+		return
+	}
+
+	leader := nodes[0]
+	replica := nodes[1]
+
 	if len(os.Args) < 2 {
-		println("Must provide 0-indexed id which refers to a line in './servers.txt'")
-		return
+		println("Running replica")
+		server := NewAucServer(replica, leader)
+		server.Serve()
+	} else {
+		if os.Args[1] != "leader" {
+			println("Argument must be 'leader' to indicate that this is the leader node")
+			return
+		}
+		println("Running leader")
+		server := NewAucServer(leader, replica)
+		server.Serve()
 	}
 
-	id, err := strconv.Atoi(os.Args[1])
-	if id < 0 || id >= len(nodes) {
-		fmt.Printf("ID out of bounds: %d for %v", id, nodes)
-		return
-	}
-
-	server := NewAucServer(uint(id), nodes)
-	server.Serve()
 }
 

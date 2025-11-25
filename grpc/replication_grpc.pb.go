@@ -19,9 +19,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AuctionService_Bid_FullMethodName    = "/grpc.AuctionService/Bid"
-	AuctionService_Result_FullMethodName = "/grpc.AuctionService/Result"
-	AuctionService_Ping_FullMethodName   = "/grpc.AuctionService/Ping"
+	AuctionService_Bid_FullMethodName       = "/grpc.AuctionService/Bid"
+	AuctionService_Result_FullMethodName    = "/grpc.AuctionService/Result"
+	AuctionService_Ping_FullMethodName      = "/grpc.AuctionService/Ping"
+	AuctionService_Replicate_FullMethodName = "/grpc.AuctionService/Replicate"
 )
 
 // AuctionServiceClient is the client API for AuctionService service.
@@ -29,9 +30,11 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type AuctionServiceClient interface {
 	// AUCTION RPC CALLS
-	Bid(ctx context.Context, in *ClientBid, opts ...grpc.CallOption) (*Acknowledgement, error)
+	Bid(ctx context.Context, in *ClientBid, opts ...grpc.CallOption) (*ClientBidResp, error)
 	Result(ctx context.Context, in *Nothing, opts ...grpc.CallOption) (*Outcome, error)
-	Ping(ctx context.Context, in *Nothing, opts ...grpc.CallOption) (*Nothing, error)
+	Ping(ctx context.Context, in *Nothing, opts ...grpc.CallOption) (*IsLeader, error)
+	// REPLICATION
+	Replicate(ctx context.Context, in *ClientBid, opts ...grpc.CallOption) (*Nothing, error)
 }
 
 type auctionServiceClient struct {
@@ -42,9 +45,9 @@ func NewAuctionServiceClient(cc grpc.ClientConnInterface) AuctionServiceClient {
 	return &auctionServiceClient{cc}
 }
 
-func (c *auctionServiceClient) Bid(ctx context.Context, in *ClientBid, opts ...grpc.CallOption) (*Acknowledgement, error) {
+func (c *auctionServiceClient) Bid(ctx context.Context, in *ClientBid, opts ...grpc.CallOption) (*ClientBidResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Acknowledgement)
+	out := new(ClientBidResp)
 	err := c.cc.Invoke(ctx, AuctionService_Bid_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -62,10 +65,20 @@ func (c *auctionServiceClient) Result(ctx context.Context, in *Nothing, opts ...
 	return out, nil
 }
 
-func (c *auctionServiceClient) Ping(ctx context.Context, in *Nothing, opts ...grpc.CallOption) (*Nothing, error) {
+func (c *auctionServiceClient) Ping(ctx context.Context, in *Nothing, opts ...grpc.CallOption) (*IsLeader, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(IsLeader)
+	err := c.cc.Invoke(ctx, AuctionService_Ping_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *auctionServiceClient) Replicate(ctx context.Context, in *ClientBid, opts ...grpc.CallOption) (*Nothing, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Nothing)
-	err := c.cc.Invoke(ctx, AuctionService_Ping_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, AuctionService_Replicate_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -77,9 +90,11 @@ func (c *auctionServiceClient) Ping(ctx context.Context, in *Nothing, opts ...gr
 // for forward compatibility.
 type AuctionServiceServer interface {
 	// AUCTION RPC CALLS
-	Bid(context.Context, *ClientBid) (*Acknowledgement, error)
+	Bid(context.Context, *ClientBid) (*ClientBidResp, error)
 	Result(context.Context, *Nothing) (*Outcome, error)
-	Ping(context.Context, *Nothing) (*Nothing, error)
+	Ping(context.Context, *Nothing) (*IsLeader, error)
+	// REPLICATION
+	Replicate(context.Context, *ClientBid) (*Nothing, error)
 	mustEmbedUnimplementedAuctionServiceServer()
 }
 
@@ -90,14 +105,17 @@ type AuctionServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedAuctionServiceServer struct{}
 
-func (UnimplementedAuctionServiceServer) Bid(context.Context, *ClientBid) (*Acknowledgement, error) {
+func (UnimplementedAuctionServiceServer) Bid(context.Context, *ClientBid) (*ClientBidResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Bid not implemented")
 }
 func (UnimplementedAuctionServiceServer) Result(context.Context, *Nothing) (*Outcome, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Result not implemented")
 }
-func (UnimplementedAuctionServiceServer) Ping(context.Context, *Nothing) (*Nothing, error) {
+func (UnimplementedAuctionServiceServer) Ping(context.Context, *Nothing) (*IsLeader, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Ping not implemented")
+}
+func (UnimplementedAuctionServiceServer) Replicate(context.Context, *ClientBid) (*Nothing, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Replicate not implemented")
 }
 func (UnimplementedAuctionServiceServer) mustEmbedUnimplementedAuctionServiceServer() {}
 func (UnimplementedAuctionServiceServer) testEmbeddedByValue()                        {}
@@ -174,6 +192,24 @@ func _AuctionService_Ping_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AuctionService_Replicate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClientBid)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuctionServiceServer).Replicate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuctionService_Replicate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuctionServiceServer).Replicate(ctx, req.(*ClientBid))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AuctionService_ServiceDesc is the grpc.ServiceDesc for AuctionService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -192,6 +228,10 @@ var AuctionService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Ping",
 			Handler:    _AuctionService_Ping_Handler,
+		},
+		{
+			MethodName: "Replicate",
+			Handler:    _AuctionService_Replicate_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

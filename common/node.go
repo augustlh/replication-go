@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"strconv"
+	"slices"
 )
  
 func Map[x any, y any](xs []x, f func(x) y) []y {
@@ -102,6 +103,16 @@ func ReadServerFile(filepath string) ([]NodeInfo, error) {
 			func (x string) bool { return connectionAddrIsValid(x); }),
 		func (x string) NodeInfo { return NodeInfo { ConnectionAddr: x }},
 	)
+
+	slices.SortFunc(servers, func (a NodeInfo, b NodeInfo) int {
+		if b.ConnectionAddr < a.ConnectionAddr {
+			return -1
+		} else if b.ConnectionAddr == a.ConnectionAddr {
+			return 0
+		} else {
+			return 1
+		}
+	})
 
 	return servers, nil
 }

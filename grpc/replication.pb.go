@@ -21,6 +21,52 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type ClientBidStatus int32
+
+const (
+	ClientBidStatus_OK    ClientBidStatus = 0
+	ClientBidStatus_ERROR ClientBidStatus = 1
+)
+
+// Enum value maps for ClientBidStatus.
+var (
+	ClientBidStatus_name = map[int32]string{
+		0: "OK",
+		1: "ERROR",
+	}
+	ClientBidStatus_value = map[string]int32{
+		"OK":    0,
+		"ERROR": 1,
+	}
+)
+
+func (x ClientBidStatus) Enum() *ClientBidStatus {
+	p := new(ClientBidStatus)
+	*p = x
+	return p
+}
+
+func (x ClientBidStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ClientBidStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_grpc_replication_proto_enumTypes[0].Descriptor()
+}
+
+func (ClientBidStatus) Type() protoreflect.EnumType {
+	return &file_grpc_replication_proto_enumTypes[0]
+}
+
+func (x ClientBidStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ClientBidStatus.Descriptor instead.
+func (ClientBidStatus) EnumDescriptor() ([]byte, []int) {
+	return file_grpc_replication_proto_rawDescGZIP(), []int{0}
+}
+
 type Nothing struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -195,6 +241,7 @@ type Outcome struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Bid           *ClientBid             `protobuf:"bytes,1,opt,name=bid,proto3" json:"bid,omitempty"`
 	IsFinal       bool                   `protobuf:"varint,2,opt,name=isFinal,proto3" json:"isFinal,omitempty"`
+	IsValid       bool                   `protobuf:"varint,3,opt,name=isValid,proto3" json:"isValid,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -239,6 +286,13 @@ func (x *Outcome) GetBid() *ClientBid {
 func (x *Outcome) GetIsFinal() bool {
 	if x != nil {
 		return x.IsFinal
+	}
+	return false
+}
+
+func (x *Outcome) GetIsValid() bool {
+	if x != nil {
+		return x.IsValid
 	}
 	return false
 }
@@ -303,6 +357,94 @@ func (x *ClientBid) GetItem() string {
 	return ""
 }
 
+type ClientBidResp struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Status        ClientBidStatus        `protobuf:"varint,1,opt,name=status,proto3,enum=grpc.ClientBidStatus" json:"status,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClientBidResp) Reset() {
+	*x = ClientBidResp{}
+	mi := &file_grpc_replication_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClientBidResp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClientBidResp) ProtoMessage() {}
+
+func (x *ClientBidResp) ProtoReflect() protoreflect.Message {
+	mi := &file_grpc_replication_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClientBidResp.ProtoReflect.Descriptor instead.
+func (*ClientBidResp) Descriptor() ([]byte, []int) {
+	return file_grpc_replication_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *ClientBidResp) GetStatus() ClientBidStatus {
+	if x != nil {
+		return x.Status
+	}
+	return ClientBidStatus_OK
+}
+
+type IsLeader struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	IsLeader      bool                   `protobuf:"varint,1,opt,name=isLeader,proto3" json:"isLeader,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *IsLeader) Reset() {
+	*x = IsLeader{}
+	mi := &file_grpc_replication_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IsLeader) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IsLeader) ProtoMessage() {}
+
+func (x *IsLeader) ProtoReflect() protoreflect.Message {
+	mi := &file_grpc_replication_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IsLeader.ProtoReflect.Descriptor instead.
+func (*IsLeader) Descriptor() ([]byte, []int) {
+	return file_grpc_replication_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *IsLeader) GetIsLeader() bool {
+	if x != nil {
+		return x.IsLeader
+	}
+	return false
+}
+
 var File_grpc_replication_proto protoreflect.FileDescriptor
 
 const file_grpc_replication_proto_rawDesc = "" +
@@ -314,18 +456,27 @@ const file_grpc_replication_proto_rawDesc = "" +
 	"\x0econnectionAddr\x18\x01 \x01(\tR\x0econnectionAddr\"L\n" +
 	"\x06Amount\x12*\n" +
 	"\bnodeInfo\x18\x01 \x01(\v2\x0e.grpc.NodeInfoR\bnodeInfo\x12\x16\n" +
-	"\x06amount\x18\x02 \x01(\rR\x06amount\"F\n" +
+	"\x06amount\x18\x02 \x01(\rR\x06amount\"`\n" +
 	"\aOutcome\x12!\n" +
 	"\x03bid\x18\x01 \x01(\v2\x0f.grpc.ClientBidR\x03bid\x12\x18\n" +
-	"\aisFinal\x18\x02 \x01(\bR\aisFinal\"S\n" +
+	"\aisFinal\x18\x02 \x01(\bR\aisFinal\x12\x18\n" +
+	"\aisValid\x18\x03 \x01(\bR\aisValid\"S\n" +
 	"\tClientBid\x12\x1a\n" +
 	"\busername\x18\x01 \x01(\tR\busername\x12\x16\n" +
 	"\x06amount\x18\x02 \x01(\rR\x06amount\x12\x12\n" +
-	"\x04item\x18\x03 \x01(\tR\x04item2\x8d\x01\n" +
-	"\x0eAuctionService\x12-\n" +
-	"\x03Bid\x12\x0f.grpc.ClientBid\x1a\x15.grpc.Acknowledgement\x12&\n" +
-	"\x06Result\x12\r.grpc.Nothing\x1a\r.grpc.Outcome\x12$\n" +
-	"\x04Ping\x12\r.grpc.Nothing\x1a\r.grpc.NothingB\x15Z\x13replication-go/grpcb\x06proto3"
+	"\x04item\x18\x03 \x01(\tR\x04item\">\n" +
+	"\rClientBidResp\x12-\n" +
+	"\x06status\x18\x01 \x01(\x0e2\x15.grpc.ClientBidStatusR\x06status\"&\n" +
+	"\bIsLeader\x12\x1a\n" +
+	"\bisLeader\x18\x01 \x01(\bR\bisLeader*$\n" +
+	"\x0fClientBidStatus\x12\x06\n" +
+	"\x02OK\x10\x00\x12\t\n" +
+	"\x05ERROR\x10\x012\xb9\x01\n" +
+	"\x0eAuctionService\x12+\n" +
+	"\x03Bid\x12\x0f.grpc.ClientBid\x1a\x13.grpc.ClientBidResp\x12&\n" +
+	"\x06Result\x12\r.grpc.Nothing\x1a\r.grpc.Outcome\x12%\n" +
+	"\x04Ping\x12\r.grpc.Nothing\x1a\x0e.grpc.IsLeader\x12+\n" +
+	"\tReplicate\x12\x0f.grpc.ClientBid\x1a\r.grpc.NothingB\x15Z\x13replication-go/grpcb\x06proto3"
 
 var (
 	file_grpc_replication_proto_rawDescOnce sync.Once
@@ -339,29 +490,36 @@ func file_grpc_replication_proto_rawDescGZIP() []byte {
 	return file_grpc_replication_proto_rawDescData
 }
 
-var file_grpc_replication_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_grpc_replication_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_grpc_replication_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_grpc_replication_proto_goTypes = []any{
-	(*Nothing)(nil),         // 0: grpc.Nothing
-	(*Acknowledgement)(nil), // 1: grpc.Acknowledgement
-	(*NodeInfo)(nil),        // 2: grpc.NodeInfo
-	(*Amount)(nil),          // 3: grpc.Amount
-	(*Outcome)(nil),         // 4: grpc.Outcome
-	(*ClientBid)(nil),       // 5: grpc.ClientBid
+	(ClientBidStatus)(0),    // 0: grpc.ClientBidStatus
+	(*Nothing)(nil),         // 1: grpc.Nothing
+	(*Acknowledgement)(nil), // 2: grpc.Acknowledgement
+	(*NodeInfo)(nil),        // 3: grpc.NodeInfo
+	(*Amount)(nil),          // 4: grpc.Amount
+	(*Outcome)(nil),         // 5: grpc.Outcome
+	(*ClientBid)(nil),       // 6: grpc.ClientBid
+	(*ClientBidResp)(nil),   // 7: grpc.ClientBidResp
+	(*IsLeader)(nil),        // 8: grpc.IsLeader
 }
 var file_grpc_replication_proto_depIdxs = []int32{
-	2, // 0: grpc.Amount.nodeInfo:type_name -> grpc.NodeInfo
-	5, // 1: grpc.Outcome.bid:type_name -> grpc.ClientBid
-	5, // 2: grpc.AuctionService.Bid:input_type -> grpc.ClientBid
-	0, // 3: grpc.AuctionService.Result:input_type -> grpc.Nothing
-	0, // 4: grpc.AuctionService.Ping:input_type -> grpc.Nothing
-	1, // 5: grpc.AuctionService.Bid:output_type -> grpc.Acknowledgement
-	4, // 6: grpc.AuctionService.Result:output_type -> grpc.Outcome
-	0, // 7: grpc.AuctionService.Ping:output_type -> grpc.Nothing
-	5, // [5:8] is the sub-list for method output_type
-	2, // [2:5] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	3, // 0: grpc.Amount.nodeInfo:type_name -> grpc.NodeInfo
+	6, // 1: grpc.Outcome.bid:type_name -> grpc.ClientBid
+	0, // 2: grpc.ClientBidResp.status:type_name -> grpc.ClientBidStatus
+	6, // 3: grpc.AuctionService.Bid:input_type -> grpc.ClientBid
+	1, // 4: grpc.AuctionService.Result:input_type -> grpc.Nothing
+	1, // 5: grpc.AuctionService.Ping:input_type -> grpc.Nothing
+	6, // 6: grpc.AuctionService.Replicate:input_type -> grpc.ClientBid
+	7, // 7: grpc.AuctionService.Bid:output_type -> grpc.ClientBidResp
+	5, // 8: grpc.AuctionService.Result:output_type -> grpc.Outcome
+	8, // 9: grpc.AuctionService.Ping:output_type -> grpc.IsLeader
+	1, // 10: grpc.AuctionService.Replicate:output_type -> grpc.Nothing
+	7, // [7:11] is the sub-list for method output_type
+	3, // [3:7] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_grpc_replication_proto_init() }
@@ -374,13 +532,14 @@ func file_grpc_replication_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_grpc_replication_proto_rawDesc), len(file_grpc_replication_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   6,
+			NumEnums:      1,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_grpc_replication_proto_goTypes,
 		DependencyIndexes: file_grpc_replication_proto_depIdxs,
+		EnumInfos:         file_grpc_replication_proto_enumTypes,
 		MessageInfos:      file_grpc_replication_proto_msgTypes,
 	}.Build()
 	File_grpc_replication_proto = out.File

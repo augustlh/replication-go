@@ -21,6 +21,7 @@ message Amount {
 message Outcome {
   ClientBid bid = 1;
   bool isFinal = 2;
+  bool isValid = 3;
 }
 
 message ClientBid {
@@ -29,12 +30,26 @@ message ClientBid {
   string item = 3;
 }
 
+enum ClientBidStatus {
+  OK = 0;
+  ERROR = 1;
+}
+message ClientBidResp {
+  ClientBidStatus status = 1;
+}
+
+message IsLeader {
+  bool isLeader = 1;
+}
 
 service AuctionService {
   // AUCTION RPC CALLS
-  rpc Bid(ClientBid) returns (Acknowledgement);
+  rpc Bid(ClientBid) returns (ClientBidResp);
   rpc Result(Nothing) returns (Outcome);
 
-  rpc Ping(Nothing) returns (Nothing);
+  rpc Ping(Nothing) returns (IsLeader);
+
+  // REPLICATION
+  rpc Replicate(ClientBid) returns (Nothing);
 }
 
