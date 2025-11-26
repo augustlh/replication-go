@@ -1,0 +1,56 @@
+syntax = "proto3";
+
+package grpc;
+
+option go_package = "replication-go/grpc";
+
+message Nothing {}
+
+message NodeInfo {
+  // ip:port
+  // i.e: 127.0.0.1:4356
+  string connectionAddr = 1;
+}
+
+message Outcome {
+  ClientBid bid = 1;
+  bool isFinal = 2;
+  bool isValid = 3;
+}
+
+message ClientBid {
+  string username = 1;
+  uint32 amount = 2;
+  string item = 3;
+}
+
+enum ClientBidStatus {
+  SUCCESS = 0;
+  FAIL_AUCTION_IS_DONE = 1;
+  FAIL_BID_TOO_LOW = 2;
+  EXCEPTION = 3;
+}
+message ClientBidResp {
+  ClientBidStatus status = 1;
+}
+
+message Time {
+  uint64 timestamp = 1;
+}
+
+message IsLeader {
+  bool isLeader = 1;
+}
+
+service AuctionService {
+  // AUCTION RPC CALLS
+  rpc Bid(ClientBid) returns (ClientBidResp);
+  rpc Result(Nothing) returns (Outcome);
+
+  rpc Ping(Nothing) returns (IsLeader);
+
+  // REPLICATION
+  rpc Replicate(ClientBid) returns (Nothing);
+  rpc ReplicateTime(Time) returns (Nothing);
+}
+
