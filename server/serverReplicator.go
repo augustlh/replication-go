@@ -96,7 +96,7 @@ func (server *AucServer) Serve() {
 			break
 		}
 
-		server.auctionDeadline.Store( time.Now().Add( 30*time.Second ) )
+		server.auctionDeadline.Store( time.Now().Add( 60*time.Second ) )
 
 		server.peer.conn.ReplicateTime(context.Background(), 
 			&proto.Time{ Timestamp: uint64(server.auctionDeadline.Load().Unix()) })
