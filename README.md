@@ -3,6 +3,7 @@
 > Other than prolonged demise in ornate ways.
 > Most of the time it's pathetic, quick and useless.
 > And good neighbours don't bother digging up the graves.
+— How this project made us feel
 
 Must start leader before replica to avoid undefined behaviour because of reasons.
 
