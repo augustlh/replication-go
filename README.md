@@ -8,12 +8,12 @@ Must start leader before replica to avoid undefined behaviour because of reasons
 
 Start leader like so
 ```
-go run server/server.go leader
+go run server/serverReplicator.go leader
 ```
 
 Start replica like so
 ```
-go run server/server.go
+go run server/serverReplicator.go
 ```
 
 Make a bid like so
