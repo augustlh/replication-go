@@ -33,3 +33,9 @@ See current auction result like so
 go run client/client.go result
 ```
 
+# Understanding the servers.txt config file
+
+The first line in the config file is the IP and port the initial leader node
+will use. The second line in the config file is the IP and port the initial
+replica will use.
+
