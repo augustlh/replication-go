@@ -111,7 +111,7 @@ func Bid(client *Client) {
 	status, err := client.conn.Bid(context.Background(), &bid)
 
 	if err != nil {
-		fmt.Println(err.Error())
+		fmt.Println("Nodes are dead: ", err.Error())
 	} else {
 		fmt.Printf("Bid response: %v\n", status.Status)
 	}

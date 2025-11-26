@@ -19,10 +19,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AuctionService_Bid_FullMethodName       = "/grpc.AuctionService/Bid"
-	AuctionService_Result_FullMethodName    = "/grpc.AuctionService/Result"
-	AuctionService_Ping_FullMethodName      = "/grpc.AuctionService/Ping"
-	AuctionService_Replicate_FullMethodName = "/grpc.AuctionService/Replicate"
+	AuctionService_Bid_FullMethodName           = "/grpc.AuctionService/Bid"
+	AuctionService_Result_FullMethodName        = "/grpc.AuctionService/Result"
+	AuctionService_Ping_FullMethodName          = "/grpc.AuctionService/Ping"
+	AuctionService_Replicate_FullMethodName     = "/grpc.AuctionService/Replicate"
+	AuctionService_ReplicateTime_FullMethodName = "/grpc.AuctionService/ReplicateTime"
 )
 
 // AuctionServiceClient is the client API for AuctionService service.
@@ -35,6 +36,7 @@ type AuctionServiceClient interface {
 	Ping(ctx context.Context, in *Nothing, opts ...grpc.CallOption) (*IsLeader, error)
 	// REPLICATION
 	Replicate(ctx context.Context, in *ClientBid, opts ...grpc.CallOption) (*Nothing, error)
+	ReplicateTime(ctx context.Context, in *Time, opts ...grpc.CallOption) (*Nothing, error)
 }
 
 type auctionServiceClient struct {
@@ -85,6 +87,16 @@ func (c *auctionServiceClient) Replicate(ctx context.Context, in *ClientBid, opt
 	return out, nil
 }
 
+func (c *auctionServiceClient) ReplicateTime(ctx context.Context, in *Time, opts ...grpc.CallOption) (*Nothing, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Nothing)
+	err := c.cc.Invoke(ctx, AuctionService_ReplicateTime_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AuctionServiceServer is the server API for AuctionService service.
 // All implementations must embed UnimplementedAuctionServiceServer
 // for forward compatibility.
@@ -95,6 +107,7 @@ type AuctionServiceServer interface {
 	Ping(context.Context, *Nothing) (*IsLeader, error)
 	// REPLICATION
 	Replicate(context.Context, *ClientBid) (*Nothing, error)
+	ReplicateTime(context.Context, *Time) (*Nothing, error)
 	mustEmbedUnimplementedAuctionServiceServer()
 }
 
@@ -116,6 +129,9 @@ func (UnimplementedAuctionServiceServer) Ping(context.Context, *Nothing) (*IsLea
 }
 func (UnimplementedAuctionServiceServer) Replicate(context.Context, *ClientBid) (*Nothing, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Replicate not implemented")
+}
+func (UnimplementedAuctionServiceServer) ReplicateTime(context.Context, *Time) (*Nothing, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReplicateTime not implemented")
 }
 func (UnimplementedAuctionServiceServer) mustEmbedUnimplementedAuctionServiceServer() {}
 func (UnimplementedAuctionServiceServer) testEmbeddedByValue()                        {}
@@ -210,6 +226,24 @@ func _AuctionService_Replicate_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AuctionService_ReplicateTime_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Time)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuctionServiceServer).ReplicateTime(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuctionService_ReplicateTime_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuctionServiceServer).ReplicateTime(ctx, req.(*Time))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AuctionService_ServiceDesc is the grpc.ServiceDesc for AuctionService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -232,6 +266,10 @@ var AuctionService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Replicate",
 			Handler:    _AuctionService_Replicate_Handler,
+		},
+		{
+			MethodName: "ReplicateTime",
+			Handler:    _AuctionService_ReplicateTime_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

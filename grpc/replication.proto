@@ -5,17 +5,11 @@ package grpc;
 option go_package = "replication-go/grpc";
 
 message Nothing {}
-message Acknowledgement {}
 
 message NodeInfo {
   // ip:port
   // i.e: 127.0.0.1:4356
   string connectionAddr = 1;
-}
-
-message Amount {
-  NodeInfo nodeInfo = 1;
-  uint32 amount = 2;
 }
 
 message Outcome {
@@ -31,11 +25,17 @@ message ClientBid {
 }
 
 enum ClientBidStatus {
-  OK = 0;
-  ERROR = 1;
+  SUCCESS = 0;
+  FAIL_AUCTION_IS_DONE = 1;
+  FAIL_BID_TOO_LOW = 2;
+  EXCEPTION = 3;
 }
 message ClientBidResp {
   ClientBidStatus status = 1;
+}
+
+message Time {
+  uint64 timestamp = 1;
 }
 
 message IsLeader {
@@ -51,5 +51,6 @@ service AuctionService {
 
   // REPLICATION
   rpc Replicate(ClientBid) returns (Nothing);
+  rpc ReplicateTime(Time) returns (Nothing);
 }
 
