@@ -6,6 +6,8 @@
 
 — How this project made us feel
 
+# Using the program
+
 Must start leader before replica to avoid undefined behaviour because of reasons.
 
 Start leader like so
